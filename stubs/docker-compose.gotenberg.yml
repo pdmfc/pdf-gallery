@@ -1,0 +1,7 @@
+# Exemplo opcional: Gotenberg como serviço de conversão Word → PDF
+# Uso: docker compose -f stubs/docker-compose.gotenberg.yml up -d
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports:
+      - "3000:3000"

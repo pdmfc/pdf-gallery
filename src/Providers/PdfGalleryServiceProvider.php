@@ -1,0 +1,121 @@
+<?php
+
+namespace PDMFC\PdfGallery\Providers;
+
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Inertia\Inertia;
+use PDMFC\PdfGallery\Console\Commands\CheckToolsCommand;
+use PDMFC\PdfGallery\Http\Controllers\PdfGalleryController;
+use PDMFC\PdfGallery\Services\Convert\FpdfImageConverter;
+use PDMFC\PdfGallery\Services\Convert\GhostscriptImageConverter;
+use PDMFC\PdfGallery\Services\Convert\GotenbergConverter;
+use PDMFC\PdfGallery\Services\Convert\LibreOfficeConverter;
+use PDMFC\PdfGallery\Services\PdfConvertService;
+use PDMFC\PdfGallery\Services\PdfExtractService;
+use PDMFC\PdfGallery\Services\PdfGalleryService;
+use PDMFC\PdfGallery\Services\PdfMergeService;
+use PDMFC\PdfGallery\Services\PdfThumbnailService;
+use PDMFC\PdfGallery\Services\QrCodeService;
+use PDMFC\PdfGallery\Support\CallbackRoute;
+use PDMFC\PdfGallery\Support\CliBinaryResolver;
+use PDMFC\PdfGallery\Support\PdfStorage;
+
+class PdfGalleryServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->mergeConfigFrom(__DIR__.'/../Config/pdf-gallery.php', 'pdf-gallery');
+
+        $this->app->singleton(CliBinaryResolver::class);
+        $this->app->singleton(PdfStorage::class);
+        $this->app->singleton(PdfMergeService::class);
+        $this->app->singleton(PdfExtractService::class);
+        $this->app->singleton(PdfThumbnailService::class);
+        $this->app->singleton(PdfConvertService::class, function ($app) {
+            return new PdfConvertService([
+                $app->make(FpdfImageConverter::class),
+                $app->make(GhostscriptImageConverter::class),
+                $app->make(LibreOfficeConverter::class),
+                $app->make(GotenbergConverter::class),
+            ]);
+        });
+        $this->app->singleton(PdfGalleryService::class);
+        $this->app->singleton(QrCodeService::class);
+    }
+
+    public function boot(): void
+    {
+        $this->registerBroadcastChannels();
+        $this->shareInertiaConfig();
+
+        $this->loadViewsFrom(__DIR__.'/../Resources/views', 'pdf-gallery');
+
+        $this->publishes([
+            __DIR__.'/../Config/pdf-gallery.php' => config_path('pdf-gallery.php'),
+        ], 'pdf-gallery-config');
+
+        $this->publishes([
+            __DIR__.'/../stubs/routes-demo.php' => base_path('routes/pdf-gallery-demo.php'),
+        ], 'pdf-gallery-demo-routes');
+
+        $this->publishes([
+            __DIR__.'/../stubs/deployment.env.example' => base_path('pdf-gallery.deployment.env.example'),
+        ], 'pdf-gallery-deployment');
+
+        $this->publishes([
+            __DIR__.'/../stubs/nova-service-provider.php' => base_path('stubs/pdf-gallery-nova-service-provider.php'),
+        ], 'pdf-gallery-nova');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                CheckToolsCommand::class,
+            ]);
+        }
+
+        if (config('pdf-gallery.demo_routes', false)) {
+            Route::middleware('web')->group(function () {
+                $this->loadRoutesFrom(__DIR__.'/../Routes/demo.php');
+            });
+        }
+
+        Route::prefix((string) config('pdf-gallery.routes.prefix', 'api'))->group(function () {
+            $this->loadRoutesFrom(__DIR__.'/../Routes/api.php');
+        });
+
+        $callbackRoute = Route::middleware(config('pdf-gallery.routes.callback_middleware', ['api']))
+            ->post(CallbackRoute::routePath(), [PdfGalleryController::class, 'callbackFiles'])
+            ->name('pdf-gallery.callback.files');
+
+        if (config('pdf-gallery.qr_code.callback_scope_constraint') === 'uuid') {
+            $callbackRoute->whereUuid(CallbackRoute::routeParameterName());
+        }
+    }
+
+    protected function registerBroadcastChannels(): void
+    {
+        if (! $this->app->runningInConsole() && $this->app->bound('Illuminate\Broadcasting\BroadcastManager')) {
+            require __DIR__.'/../Routes/channels.php';
+        }
+    }
+
+    protected function shareInertiaConfig(): void
+    {
+        if (! class_exists(Inertia::class)) {
+            return;
+        }
+
+        Inertia::share([
+            'pdfGallery' => fn (): array => [
+                'maxFiles' => (int) config('pdf-gallery.gallery.max_files', 100),
+                'maxUploadMb' => (int) config('pdf-gallery.gallery.max_upload_mb', 25),
+                'mergeMaxFiles' => (int) config('pdf-gallery.merge.max_files', 50),
+                'qrCodeEnabled' => (bool) config('pdf-gallery.qr_code.enabled', true),
+                'convertEnabled' => (bool) config('pdf-gallery.convert.enabled', false),
+                'title' => (string) config('pdf-gallery.ui.title', 'Galeria de PDF'),
+                'documentSingular' => (string) config('pdf-gallery.ui.document_singular', 'documento'),
+                'documentPlural' => (string) config('pdf-gallery.ui.document_plural', 'documentos'),
+            ],
+        ]);
+    }
+}
