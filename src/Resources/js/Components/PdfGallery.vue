@@ -92,8 +92,6 @@ const docLabel = (count) => formatDocumentCount(count, ui.value)
 const isViewMode = computed(() => props.mode === 'view')
 const isFullMode = computed(() => !isViewMode.value)
 
-const emit = defineEmits(['useInForm'])
-
 const api = usePdfGalleryApi()
 const { notification, showNotification, dismissNotification } = useEditorNotification()
 
@@ -294,20 +292,51 @@ const isFalsyFlag = (value) => {
   return false
 }
 
+const normalizeGalleryDocument = (document) => {
+  if (!document?.filename) {
+    return document
+  }
+
+  const normalized = { ...document }
+  const filenameProtected = isGalleryFilenameProtected(
+    normalized.filename,
+    protectedFilenames.value,
+  )
+
+  if (
+    isTruthyFlag(normalized.protected)
+    || isFalsyFlag(normalized.deletable)
+    || filenameProtected
+  ) {
+    normalized.protected = true
+    normalized.deletable = false
+  } else if (normalized.deletable === undefined && normalized.protected === undefined) {
+    normalized.deletable = true
+    normalized.protected = false
+  }
+
+  return normalized
+}
+
+const normalizeGalleryDocuments = (items) =>
+  (Array.isArray(items) ? items : []).map((document) => normalizeGalleryDocument(document))
+
 const isDocumentDeletable = (document) => {
-  if (!document) {
+  const normalized = normalizeGalleryDocument(document)
+
+  if (!normalized?.filename) {
     return false
   }
 
-  if (isTruthyFlag(document.protected)) {
+  if (isTruthyFlag(normalized.protected)) {
     return false
   }
 
-  if (isFalsyFlag(document.deletable)) {
+  if (isFalsyFlag(normalized.deletable)) {
     return false
   }
 
-  if (isGalleryFilenameProtected(document.filename, protectedFilenames.value)) {
+  if (isGalleryFilenameProtected(normalized.filename, protectedFilenames.value)) {
     return false
   }
 
@@ -334,57 +363,18 @@ const filterDeletableFilenames = (filenames) =>
   })
 
 const applySavedDocument = (document) => {
-  if (!document?.filename) {
+  const normalized = normalizeGalleryDocument(document)
+
+  if (!normalized?.filename) {
     return
   }
 
-  documents.value.push(document)
-  activeFilename.value = document.filename
+  documents.value.push(normalized)
+  activeFilename.value = normalized.filename
   previewMode.value = 'single'
-  selectedFilenames.value = new Set([document.filename])
+  selectedFilenames.value = new Set([normalized.filename])
   mergedSourceFilenames.value = []
   revokeMergedUrl()
-}
-
-const canUseInForm = computed(() => {
-  if (!props.asModal) {
-    return false
-  }
-
-  if (previewMode.value === 'merged' && mergedPreviewUrl.value) {
-    return selectedCount.value >= 2
-  }
-
-  return Boolean(activeDocument.value)
-})
-
-const useInForm = () => {
-  if (!canUseInForm.value) {
-    showNotification('error', 'Erro', `Seleccione um ${ui.value.documentSingular} ou junte vários ${ui.value.documentPlural}.`)
-    return
-  }
-
-  if (previewMode.value === 'merged') {
-    const filenames = mergedSourceFilenames.value.length
-      ? mergedSourceFilenames.value
-      : selectedFilenamesInGalleryOrder()
-
-    emit('useInForm', {
-      merged: true,
-      filenames,
-      filename: activeDocument.value?.filename || 'documentos-unidos.pdf',
-      url: previewUrl.value,
-    })
-
-    return
-  }
-
-  emit('useInForm', {
-    merged: false,
-    filenames: [activeDocument.value.filename],
-    filename: activeDocument.value.filename,
-    url: activeDocument.value.url,
-  })
 }
 
 const revokeMergedUrl = () => {
@@ -420,7 +410,7 @@ const loadDocuments = async () => {
       throw new Error(data.error)
     }
 
-    documents.value = data.documents || []
+    documents.value = normalizeGalleryDocuments(data.documents)
     syncSelectionAfterListChange()
 
     if (!activeFilename.value && documents.value.length > 0) {
@@ -541,17 +531,18 @@ const uploadFiles = async (fileList) => {
       }
 
       if (data.document) {
+        const normalized = normalizeGalleryDocument(data.document)
         const existingIndex = documents.value.findIndex(
-          (document) => document.filename === data.document.filename
+          (document) => document.filename === normalized.filename
         )
 
         if (existingIndex >= 0) {
-          documents.value.splice(existingIndex, 1, data.document)
+          documents.value.splice(existingIndex, 1, normalized)
         } else {
-          documents.value.push(data.document)
+          documents.value.push(normalized)
         }
 
-        activeFilename.value = data.document.filename
+        activeFilename.value = normalized.filename
         previewMode.value = 'single'
         revokeMergedUrl()
       }
@@ -641,7 +632,7 @@ const handleDocumentsUploadedFromMobile = async (payload) => {
   const newNames = new Set(payload?.new_filenames ?? [])
 
   if (Array.isArray(payload?.documents) && payload.documents.length > 0) {
-    documents.value = payload.documents
+    documents.value = normalizeGalleryDocuments(payload.documents)
   } else {
     await loadDocuments()
   }
@@ -1491,7 +1482,7 @@ onBeforeUnmount(() => {
               Limpar
             </button>
             <button
-              v-if="canDeleteSelection"
+              v-if="selectedDeletableCount > 0"
               type="button"
               aria-label="Eliminar seleccionados"
               class="pdf-gallery-action-btn pdf-gallery-action-btn--danger"
@@ -1597,15 +1588,12 @@ onBeforeUnmount(() => {
         :extracting="extracting"
         :printing="printing"
         :show-toolbar="canShowPreviewToolbar"
-        :show-use-in-form="asModal && isFullMode"
-        :can-use-in-form="canUseInForm"
         :empty-message="previewEmptyMessage"
         @print="printPreview"
         @download="downloadPreview"
         @delete="deleteActiveDocument"
         @save-merged="saveMergedToGallery"
         @extract-pages="extractPagesToGallery"
-        @use-in-form="useInForm"
       />
     </main>
 

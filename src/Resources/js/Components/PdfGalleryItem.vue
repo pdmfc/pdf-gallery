@@ -293,6 +293,8 @@ const formatSize = (bytes) => {
   align-items: center;
   gap: 0.125rem;
   margin-left: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .pdf-gallery-item__btn--remove {

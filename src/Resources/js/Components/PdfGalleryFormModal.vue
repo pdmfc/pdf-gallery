@@ -55,7 +55,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:open', 'close', 'useInForm'])
+const emit = defineEmits(['update:open', 'close'])
 
 const ui = usePdfGalleryUi(
   toRef(props, 'title'),
@@ -68,11 +68,6 @@ const modalTitle = computed(() => props.title || ui.value.title)
 const closeModal = () => {
   emit('update:open', false)
   emit('close')
-}
-
-const onUseInForm = (payload) => {
-  emit('useInForm', payload)
-  closeModal()
 }
 
 watch(
@@ -128,7 +123,6 @@ onUnmounted(() => {
           :document-singular="ui.documentSingular"
           :document-plural="ui.documentPlural"
           :protected-filenames="protectedFilenames"
-          @use-in-form="onUseInForm"
         />
       </div>
     </div>

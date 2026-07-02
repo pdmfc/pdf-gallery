@@ -19,14 +19,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  showUseInForm: {
-    type: Boolean,
-    default: false,
-  },
-  canUseInForm: {
-    type: Boolean,
-    default: false,
-  },
   showExtractPages: {
     type: Boolean,
     default: false,
@@ -53,7 +45,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['print', 'download', 'save-merged', 'use-in-form', 'extract-pages', 'delete'])
+const emit = defineEmits(['print', 'download', 'save-merged', 'extract-pages', 'delete'])
 
 const canvasRef = ref(null)
 const pageNumber = ref(1)
@@ -270,23 +262,6 @@ onBeforeUnmount(() => {
               stroke-linejoin="round"
               stroke-width="2"
               d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-            />
-          </svg>
-        </button>
-        <button
-          v-if="showUseInForm"
-          type="button"
-          title="Usar no formulário"
-          class="preview-icon-btn"
-          :disabled="!canUseInForm"
-          @click="emit('use-in-form')"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
         </button>
