@@ -5,6 +5,7 @@ namespace PDMFC\PdfGallery\Providers;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Inertia\Inertia;
+use Laravel\Nova\Nova;
 use PDMFC\PdfGallery\Console\Commands\CheckToolsCommand;
 use PDMFC\PdfGallery\Http\Controllers\PdfGalleryController;
 use PDMFC\PdfGallery\Services\Convert\FpdfImageConverter;
@@ -48,6 +49,7 @@ class PdfGalleryServiceProvider extends ServiceProvider
     {
         $this->registerBroadcastChannels();
         $this->shareInertiaConfig();
+        $this->shareNovaConfig();
 
         $this->loadViewsFrom(__DIR__.'/../Resources/views', 'pdf-gallery');
 
@@ -99,6 +101,20 @@ class PdfGalleryServiceProvider extends ServiceProvider
         }
     }
 
+    protected function pdfGalleryFrontendConfig(): array
+    {
+        return [
+            'maxFiles' => (int) config('pdf-gallery.gallery.max_files', 100),
+            'maxUploadMb' => (int) config('pdf-gallery.gallery.max_upload_mb', 25),
+            'mergeMaxFiles' => (int) config('pdf-gallery.merge.max_files', 50),
+            'qrCodeEnabled' => (bool) config('pdf-gallery.qr_code.enabled', true),
+            'convertEnabled' => (bool) config('pdf-gallery.convert.enabled', false),
+            'title' => (string) config('pdf-gallery.ui.title', 'Galeria de PDF'),
+            'documentSingular' => (string) config('pdf-gallery.ui.document_singular', 'documento'),
+            'documentPlural' => (string) config('pdf-gallery.ui.document_plural', 'documentos'),
+        ];
+    }
+
     protected function shareInertiaConfig(): void
     {
         if (! class_exists(Inertia::class)) {
@@ -106,16 +122,18 @@ class PdfGalleryServiceProvider extends ServiceProvider
         }
 
         Inertia::share([
-            'pdfGallery' => fn (): array => [
-                'maxFiles' => (int) config('pdf-gallery.gallery.max_files', 100),
-                'maxUploadMb' => (int) config('pdf-gallery.gallery.max_upload_mb', 25),
-                'mergeMaxFiles' => (int) config('pdf-gallery.merge.max_files', 50),
-                'qrCodeEnabled' => (bool) config('pdf-gallery.qr_code.enabled', true),
-                'convertEnabled' => (bool) config('pdf-gallery.convert.enabled', false),
-                'title' => (string) config('pdf-gallery.ui.title', 'Galeria de PDF'),
-                'documentSingular' => (string) config('pdf-gallery.ui.document_singular', 'documento'),
-                'documentPlural' => (string) config('pdf-gallery.ui.document_plural', 'documentos'),
-            ],
+            'pdfGallery' => fn (): array => $this->pdfGalleryFrontendConfig(),
+        ]);
+    }
+
+    protected function shareNovaConfig(): void
+    {
+        if ($this->app->runningInConsole() || ! class_exists(Nova::class)) {
+            return;
+        }
+
+        Nova::provideToScript([
+            'pdfGallery' => $this->pdfGalleryFrontendConfig(),
         ]);
     }
 }
