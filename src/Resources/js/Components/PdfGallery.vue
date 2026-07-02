@@ -198,11 +198,17 @@ const previewTitle = computed(() => {
 
 const selectedCount = computed(() => selectedFilenames.value.size)
 const hasSelection = computed(() => selectedCount.value > 0)
+const deletableDocuments = computed(() => documents.value.filter((document) => isDocumentDeletable(document)))
+const selectedDeletableCount = computed(
+  () => filterDeletableFilenames([...selectedFilenames.value]).length,
+)
+const canDeleteSelection = computed(() => selectedDeletableCount.value > 0)
 const canMerge = computed(
   () => selectedCount.value >= 2 && selectedCount.value <= mergeMaxFiles.value
 )
 const allSelected = computed(
-  () => documents.value.length > 0 && selectedCount.value === documents.value.length
+  () => deletableDocuments.value.length > 0
+    && deletableDocuments.value.every((document) => selectedFilenames.value.has(document.filename)),
 )
 
 const galleryRemainingSlots = computed(() => {
@@ -405,7 +411,9 @@ const toggleSelectAll = () => {
     return
   }
 
-  selectedFilenames.value = new Set(documents.value.map((document) => document.filename))
+  selectedFilenames.value = new Set(
+    deletableDocuments.value.map((document) => document.filename),
+  )
 }
 
 const clearSelection = () => {
@@ -1441,6 +1449,7 @@ onBeforeUnmount(() => {
               Limpar
             </button>
             <button
+              v-if="canDeleteSelection"
               type="button"
               aria-label="Eliminar seleccionados"
               class="pdf-gallery-action-btn pdf-gallery-action-btn--danger"
@@ -1513,7 +1522,7 @@ onBeforeUnmount(() => {
                 :size-bytes="document.size_bytes"
                 :is-drag-source="isInReorderDragBlock(document.filename)"
                 :can-reorder="isFullMode && documents.length > 1"
-                :show-select="documents.length > 0"
+                :show-select="isDocumentDeletable(document)"
                 :show-remove="canRemoveDocument(document)"
                 :show-order-badge="isFullMode"
                 @toggle-select="toggleSelect(document.filename)"
