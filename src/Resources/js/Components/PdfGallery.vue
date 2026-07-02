@@ -14,6 +14,7 @@ import { usePdfGalleryMergeMaxFiles } from '../composables/usePdfGalleryMergeMax
 import { usePdfGalleryQrCodeEnabled } from '../composables/usePdfGalleryQrCodeEnabled.js'
 import { usePdfGalleryConvertEnabled } from '../composables/usePdfGalleryConvertEnabled.js'
 import { usePdfGalleryRealtime } from '../composables/usePdfGalleryRealtime.js'
+import { usePdfGalleryProtectedFilenames, isGalleryFilenameProtected } from '../composables/usePdfGalleryProtectedFilenames.js'
 import { formatDocumentCount, usePdfGalleryUi } from '../composables/usePdfGalleryUi.js'
 
 const vEditorTooltipRoot = editorTooltipRoot
@@ -75,6 +76,7 @@ const maxUploadMb = usePdfGalleryMaxUploadMb(toRef(props, 'maxUploadMb'))
 const mergeMaxFiles = usePdfGalleryMergeMaxFiles(toRef(props, 'mergeMaxFiles'))
 const qrCodeEnabled = usePdfGalleryQrCodeEnabled(toRef(props, 'qrCodeEnabled'))
 const convertEnabled = usePdfGalleryConvertEnabled(toRef(props, 'convertEnabled'))
+const protectedFilenames = usePdfGalleryProtectedFilenames()
 const ui = usePdfGalleryUi(
   toRef(props, 'title'),
   toRef(props, 'documentSingular'),
@@ -198,7 +200,6 @@ const previewTitle = computed(() => {
 
 const selectedCount = computed(() => selectedFilenames.value.size)
 const hasSelection = computed(() => selectedCount.value > 0)
-const deletableDocuments = computed(() => documents.value.filter((document) => isDocumentDeletable(document)))
 const selectedDeletableCount = computed(
   () => filterDeletableFilenames([...selectedFilenames.value]).length,
 )
@@ -207,8 +208,7 @@ const canMerge = computed(
   () => selectedCount.value >= 2 && selectedCount.value <= mergeMaxFiles.value
 )
 const allSelected = computed(
-  () => deletableDocuments.value.length > 0
-    && deletableDocuments.value.every((document) => selectedFilenames.value.has(document.filename)),
+  () => documents.value.length > 0 && selectedCount.value === documents.value.length,
 )
 
 const galleryRemainingSlots = computed(() => {
@@ -264,6 +264,10 @@ const canExtractPages = computed(
 
 const isDocumentDeletable = (document) => {
   if (!document) {
+    return false
+  }
+
+  if (isGalleryFilenameProtected(document.filename, protectedFilenames.value)) {
     return false
   }
 
@@ -356,7 +360,7 @@ const revokeMergedUrl = () => {
 const syncSelectionAfterListChange = () => {
   const existing = new Set(documents.value.map((document) => document.filename))
   selectedFilenames.value = new Set(
-    [...selectedFilenames.value].filter((filename) => existing.has(filename))
+    [...selectedFilenames.value].filter((filename) => existing.has(filename)),
   )
 
   if (activeFilename.value && !existing.has(activeFilename.value)) {
@@ -411,9 +415,7 @@ const toggleSelectAll = () => {
     return
   }
 
-  selectedFilenames.value = new Set(
-    deletableDocuments.value.map((document) => document.filename),
-  )
+  selectedFilenames.value = new Set(documents.value.map((document) => document.filename))
 }
 
 const clearSelection = () => {
@@ -1309,7 +1311,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <aside class="flex min-h-0 w-56 shrink-0 flex-col border-r border-gray-200 bg-white sm:w-64">
+    <aside class="flex min-h-0 w-64 shrink-0 flex-col border-r border-gray-200 bg-white sm:w-72">
       <div class="flex flex-wrap justify-center gap-1.5 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
         <template v-if="isFullMode">
         <label
@@ -1522,7 +1524,7 @@ onBeforeUnmount(() => {
                 :size-bytes="document.size_bytes"
                 :is-drag-source="isInReorderDragBlock(document.filename)"
                 :can-reorder="isFullMode && documents.length > 1"
-                :show-select="isDocumentDeletable(document)"
+                :show-select="documents.length > 0"
                 :show-remove="canRemoveDocument(document)"
                 :show-order-badge="isFullMode"
                 @toggle-select="toggleSelect(document.filename)"
