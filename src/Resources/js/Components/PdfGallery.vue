@@ -256,6 +256,33 @@ const canExtractPages = computed(
   () => isFullMode.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
 )
 
+const isDocumentDeletable = (document) => {
+  if (!document) {
+    return false
+  }
+
+  return document.deletable !== false
+}
+
+const canRemoveDocument = (document) => {
+  if (!isFullMode.value && !isViewMode.value) {
+    return false
+  }
+
+  return isDocumentDeletable(document)
+}
+
+const canDeleteActiveDocument = computed(
+  () => (isFullMode.value || isViewMode.value) && isDocumentDeletable(activeDocument.value),
+)
+
+const filterDeletableFilenames = (filenames) =>
+  filenames.filter((filename) => {
+    const document = documents.value.find((item) => item.filename === filename)
+
+    return isDocumentDeletable(document)
+  })
+
 const applySavedDocument = (document) => {
   if (!document?.filename) {
     return
@@ -601,20 +628,22 @@ const deleteSelected = () => {
 }
 
 const requestDeleteConfirmation = (filenames) => {
-  if (filenames.length === 0) {
+  const deletableFilenames = filterDeletableFilenames(filenames)
+
+  if (deletableFilenames.length === 0) {
     return
   }
 
-  const label = filenames.length === 1
+  const label = deletableFilenames.length === 1
     ? `este ${ui.value.documentSingular}`
-    : `estes ${filenames.length} ${ui.value.documentPlural}`
+    : `estes ${deletableFilenames.length} ${ui.value.documentPlural}`
 
   showNotification(
     'warning',
     'Confirmar eliminação',
     `Tem a certeza de que deseja eliminar ${label}?`,
     true,
-    filenames,
+    deletableFilenames,
     0,
     'delete-bulk',
     'Eliminar',
@@ -1427,7 +1456,7 @@ onBeforeUnmount(() => {
           class="mt-2 text-[10px] leading-snug text-gray-500"
         >
           <template v-if="isFullMode">
-            Pontos à esquerda para reordenar · clique na miniatura para pré-visualizar
+            Pontos à esquerda para reordenar · ícone de eliminar em cada ficheiro · clique na miniatura para pré-visualizar
           </template>
           <template v-else>
             Seleccione para eliminar em bulk · clique na miniatura para pré-visualizar
@@ -1485,7 +1514,7 @@ onBeforeUnmount(() => {
                 :is-drag-source="isInReorderDragBlock(document.filename)"
                 :can-reorder="isFullMode && documents.length > 1"
                 :show-select="documents.length > 0"
-                :show-remove="isViewMode"
+                :show-remove="canRemoveDocument(document)"
                 :show-order-badge="isFullMode"
                 @toggle-select="toggleSelect(document.filename)"
                 @open="openDocument(document.filename)"
@@ -1513,7 +1542,7 @@ onBeforeUnmount(() => {
         :show-save-merged="canSaveMerged"
         :show-extract-pages="canExtractPages"
         :show-print="isFullMode"
-        :show-delete="isViewMode"
+        :show-delete="canDeleteActiveDocument"
         :extracting="extracting"
         :printing="printing"
         :show-toolbar="canShowPreviewToolbar"
