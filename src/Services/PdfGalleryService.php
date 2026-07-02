@@ -45,6 +45,7 @@ class PdfGalleryService
 
             $documents = $this->sortByGalleryOrder($userId, $documents);
             $documents = $this->enrichDocuments($userId, $documents);
+            $documents = $this->applyProtectedDocumentFlags($documents);
             $documents = $this->filterDocuments($userId, $documents);
 
             return ['documents' => $documents];
@@ -246,10 +247,33 @@ class PdfGalleryService
     public function deleteDocuments(string|int $userId, array $filenames): array
     {
         try {
+            $requested = array_values(array_unique(array_filter(array_map(
+                static fn ($name) => basename((string) $name),
+                $filenames,
+            ))));
+
+            if ($requested === []) {
+                return ['error' => 'Indique o ficheiro a eliminar.'];
+            }
+
+            $protected = $this->protectedBasenames();
+            $blocked = array_values(array_filter(
+                $requested,
+                static fn (string $name) => in_array($name, $protected, true),
+            ));
+            $deletable = array_values(array_filter(
+                $requested,
+                static fn (string $name) => ! in_array($name, $protected, true),
+            ));
+
+            if ($deletable === [] && $blocked !== []) {
+                return ['error' => 'Não é possível eliminar este documento.'];
+            }
+
             $handler = config('pdf-gallery.documents.delete_handler');
 
             if (is_callable($handler)) {
-                $handled = $handler($userId, $filenames);
+                $handled = $handler($userId, $requested);
 
                 if (is_array($handled)) {
                     return $handled;
@@ -258,7 +282,7 @@ class PdfGalleryService
 
             $deleted = 0;
 
-            foreach ($filenames as $filename) {
+            foreach ($deletable as $filename) {
                 $safe = $this->storage->safeFilename((string) $filename);
                 $path = $this->storage->filePath($userId, $safe);
 
@@ -935,6 +959,35 @@ class PdfGalleryService
      * @param  list<array<string, mixed>>  $documents
      * @return list<array<string, mixed>>
      */
+    private function applyProtectedDocumentFlags(array $documents): array
+    {
+        $protected = $this->protectedBasenames();
+
+        if ($protected === []) {
+            return $documents;
+        }
+
+        return array_values(array_map(
+            static function (array $document) use ($protected): array {
+                $basename = basename((string) ($document['filename'] ?? ''));
+
+                if ($basename === '' || ! in_array($basename, $protected, true)) {
+                    return $document;
+                }
+
+                $document['protected'] = true;
+                $document['deletable'] = false;
+
+                return $document;
+            },
+            $documents,
+        ));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $documents
+     * @return list<array<string, mixed>>
+     */
     private function filterDocuments(string|int $userId, array $documents): array
     {
         $filter = config('pdf-gallery.documents.filter');
@@ -969,5 +1022,16 @@ class PdfGalleryService
         );
 
         return array_values($filenames);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function protectedBasenames(): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($name) => basename((string) $name),
+            (array) config('pdf-gallery.gallery.protected_filenames', []),
+        ))));
     }
 }

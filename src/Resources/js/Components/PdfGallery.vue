@@ -266,9 +266,33 @@ const canExtractPages = computed(
   () => isFullMode.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
 )
 
-const isTruthyFlag = (value) => value === true || value === 1
+const isTruthyFlag = (value) => {
+  if (value === true || value === 1) {
+    return true
+  }
 
-const isFalsyFlag = (value) => value === false || value === 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+
+    return normalized === 'true' || normalized === '1'
+  }
+
+  return false
+}
+
+const isFalsyFlag = (value) => {
+  if (value === false || value === 0) {
+    return true
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+
+    return normalized === 'false' || normalized === '0'
+  }
+
+  return false
+}
 
 const isDocumentDeletable = (document) => {
   if (!document) {
