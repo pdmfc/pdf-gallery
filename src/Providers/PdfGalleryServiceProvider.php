@@ -109,6 +109,10 @@ class PdfGalleryServiceProvider extends ServiceProvider
             'mergeMaxFiles' => (int) config('pdf-gallery.merge.max_files', 50),
             'qrCodeEnabled' => (bool) config('pdf-gallery.qr_code.enabled', true),
             'convertEnabled' => (bool) config('pdf-gallery.convert.enabled', false),
+            'protectedFilenames' => array_values(array_filter(array_map(
+                static fn ($name) => basename((string) $name),
+                (array) config('pdf-gallery.gallery.protected_filenames', []),
+            ))),
             'title' => (string) config('pdf-gallery.ui.title', 'Galeria de PDF'),
             'documentSingular' => (string) config('pdf-gallery.ui.document_singular', 'documento'),
             'documentPlural' => (string) config('pdf-gallery.ui.document_plural', 'documentos'),
