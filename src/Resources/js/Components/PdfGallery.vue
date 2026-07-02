@@ -267,11 +267,19 @@ const isDocumentDeletable = (document) => {
     return false
   }
 
+  if (document.protected === true) {
+    return false
+  }
+
+  if (document.deletable === false) {
+    return false
+  }
+
   if (isGalleryFilenameProtected(document.filename, protectedFilenames.value)) {
     return false
   }
 
-  return document.deletable !== false
+  return true
 }
 
 const canRemoveDocument = (document) => {

@@ -137,7 +137,7 @@ class PdfGalleryServiceProvider extends ServiceProvider
         }
 
         Nova::provideToScript([
-            'pdfGallery' => $this->pdfGalleryFrontendConfig(),
+            'pdfGallery' => fn (): array => $this->pdfGalleryFrontendConfig(),
         ]);
     }
 }
