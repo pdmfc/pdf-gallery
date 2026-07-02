@@ -87,9 +87,8 @@ const formatSize = (bytes) => {
 
 <template>
   <article
-    class="pdf-gallery-item group grid h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
+    class="pdf-gallery-item group flex h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
     :class="[
-      canReorder ? 'pdf-gallery-item--with-reorder' : 'pdf-gallery-item--without-reorder',
       active ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200 hover:border-gray-300',
       selected ? 'border-blue-400 ring-1 ring-blue-100' : '',
       isDragSource ? 'opacity-45' : 'hover:shadow',
@@ -195,42 +194,36 @@ const formatSize = (bytes) => {
       </div>
     </button>
 
-    <button
-      v-if="showRemove"
-      type="button"
-      class="pdf-gallery-item__btn pdf-gallery-item__btn--remove"
-      aria-label="Remover"
-      @click.stop="emit('remove')"
-    >
-      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-        />
-      </svg>
-    </button>
+    <div class="pdf-gallery-item__actions">
+      <button
+        v-if="showRemove"
+        type="button"
+        class="pdf-gallery-item__btn pdf-gallery-item__btn--remove"
+        aria-label="Remover"
+        @click.stop="emit('remove')"
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
+        </svg>
+      </button>
 
-    <span
-      v-if="showOrderBadge"
-      class="pdf-gallery-item__order"
-      aria-hidden="true"
-    >
-      {{ orderIndex + 1 }}
-    </span>
+      <span
+        v-if="showOrderBadge"
+        class="pdf-gallery-item__order"
+        aria-hidden="true"
+      >
+        {{ orderIndex + 1 }}
+      </span>
+    </div>
   </article>
 </template>
 
 <style scoped>
-.pdf-gallery-item--with-reorder {
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
-}
-
-.pdf-gallery-item--without-reorder {
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-}
-
 .pdf-gallery-item__btn {
   all: unset;
   box-sizing: border-box;
@@ -289,8 +282,16 @@ const formatSize = (bytes) => {
 
 .pdf-gallery-item__btn--open {
   min-width: 0;
+  flex: 1 1 0%;
   gap: 0.5rem;
   text-align: left;
+}
+
+.pdf-gallery-item__actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.125rem;
 }
 
 .pdf-gallery-item__btn--remove {

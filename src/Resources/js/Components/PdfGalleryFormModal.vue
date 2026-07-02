@@ -49,6 +49,10 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  protectedFilenames: {
+    type: Array,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:open', 'close', 'useInForm'])
@@ -123,6 +127,7 @@ onUnmounted(() => {
           :title="modalTitle"
           :document-singular="ui.documentSingular"
           :document-plural="ui.documentPlural"
+          :protected-filenames="protectedFilenames"
           @use-in-form="onUseInForm"
         />
       </div>

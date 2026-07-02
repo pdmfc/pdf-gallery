@@ -69,6 +69,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  protectedFilenames: {
+    type: Array,
+    default: null,
+  },
 })
 
 const maxFiles = usePdfGalleryMaxFiles(toRef(props, 'maxFiles'))
@@ -76,7 +80,7 @@ const maxUploadMb = usePdfGalleryMaxUploadMb(toRef(props, 'maxUploadMb'))
 const mergeMaxFiles = usePdfGalleryMergeMaxFiles(toRef(props, 'mergeMaxFiles'))
 const qrCodeEnabled = usePdfGalleryQrCodeEnabled(toRef(props, 'qrCodeEnabled'))
 const convertEnabled = usePdfGalleryConvertEnabled(toRef(props, 'convertEnabled'))
-const protectedFilenames = usePdfGalleryProtectedFilenames()
+const protectedFilenames = usePdfGalleryProtectedFilenames(toRef(props, 'protectedFilenames'))
 const ui = usePdfGalleryUi(
   toRef(props, 'title'),
   toRef(props, 'documentSingular'),
@@ -262,16 +266,20 @@ const canExtractPages = computed(
   () => isFullMode.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
 )
 
+const isTruthyFlag = (value) => value === true || value === 1
+
+const isFalsyFlag = (value) => value === false || value === 0
+
 const isDocumentDeletable = (document) => {
   if (!document) {
     return false
   }
 
-  if (document.protected === true) {
+  if (isTruthyFlag(document.protected)) {
     return false
   }
 
-  if (document.deletable === false) {
+  if (isFalsyFlag(document.deletable)) {
     return false
   }
 
