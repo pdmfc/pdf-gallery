@@ -87,8 +87,11 @@ const formatSize = (bytes) => {
 
 <template>
   <article
-    class="pdf-gallery-item group flex h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
+    class="pdf-gallery-item group grid h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
     :class="[
+      canReorder
+        ? 'grid-cols-[auto_auto_minmax(0,1fr)_auto_auto]'
+        : 'grid-cols-[auto_minmax(0,1fr)_auto_auto]',
       active ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200 hover:border-gray-300',
       selected ? 'border-blue-400 ring-1 ring-blue-100' : '',
       isDragSource ? 'opacity-45' : 'hover:shadow',
@@ -280,7 +283,6 @@ const formatSize = (bytes) => {
 
 .pdf-gallery-item__btn--open {
   min-width: 0;
-  flex: 1 1 auto;
   gap: 0.5rem;
   text-align: left;
 }
@@ -291,6 +293,8 @@ const formatSize = (bytes) => {
   flex-shrink: 0;
   border-radius: 0.375rem;
   color: #ef4444;
+  background: #fff;
+  border: 1px solid #fecaca;
 }
 
 .pdf-gallery-item__btn--remove:hover {

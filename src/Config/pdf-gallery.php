@@ -54,6 +54,8 @@ return [
     'gallery' => [
         'max_files' => max(0, (int) env('PDF_GALLERY_MAX_FILES', 100)),
         'max_upload_mb' => max(1, (int) env('PDF_GALLERY_MAX_UPLOAD_MB', 25)),
+        // Basenames (e.g. _auto.pdf) that must never be selectable or deleted in the UI.
+        'protected_filenames' => [],
     ],
 
     'documents' => [
