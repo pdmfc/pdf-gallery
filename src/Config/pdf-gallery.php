@@ -61,6 +61,7 @@ return [
     'documents' => [
         'enricher' => null,
         'filter' => null,
+        'persist_handler' => null,
         'delete_handler' => null,
     ],
 

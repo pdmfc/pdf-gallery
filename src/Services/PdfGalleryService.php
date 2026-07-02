@@ -622,9 +622,15 @@ class PdfGalleryService
         $fullPath = $this->storage->storagePath($userId, $filename);
         $this->thumbnailService->ensureThumbnail($userId, $filename);
 
+        $document = $this->formatDocument($userId, $filename, $path, $fullPath);
+        $this->notifyDocumentPersisted($userId, $document, [
+            'type' => 'merge',
+            'merged_from' => $sourceFilenames,
+        ]);
+
         return [
             'success' => true,
-            'document' => $this->formatDocument($userId, $filename, $path, $fullPath),
+            'document' => $document,
             'merged_from' => $sourceFilenames,
         ];
     }
@@ -661,9 +667,16 @@ class PdfGalleryService
         $fullPath = $this->storage->storagePath($userId, $filename);
         $this->thumbnailService->ensureThumbnail($userId, $filename);
 
+        $document = $this->formatDocument($userId, $filename, $path, $fullPath);
+        $this->notifyDocumentPersisted($userId, $document, [
+            'type' => 'extract',
+            'extracted_from' => $sourceFilename,
+            'pages' => $pages,
+        ]);
+
         return [
             'success' => true,
-            'document' => $this->formatDocument($userId, $filename, $path, $fullPath),
+            'document' => $document,
             'extracted_from' => $sourceFilename,
             'pages' => $pages,
         ];
@@ -762,9 +775,16 @@ class PdfGalleryService
         $this->storage->appendToGalleryOrder($userId, $filename);
         $fullPath = $this->storage->storagePath($userId, $filename);
 
+        $document = $this->formatDocument($userId, $filename, $path, $fullPath);
+        $this->notifyDocumentPersisted($userId, $document, [
+            'type' => 'upload',
+            'original_name' => $originalName,
+            'mime' => GalleryDocument::guessMimeType($filename),
+        ]);
+
         return [
             'success' => true,
-            'document' => $this->formatDocument($userId, $filename, $path, $fullPath),
+            'document' => $document,
         ];
     }
 
@@ -805,9 +825,15 @@ class PdfGalleryService
         $fullPath = $this->storage->storagePath($userId, $filename);
         $this->thumbnailService->ensureThumbnail($userId, $filename);
 
+        $document = $this->formatDocument($userId, $filename, $path, $fullPath);
+        $this->notifyDocumentPersisted($userId, $document, [
+            'type' => 'upload',
+            'original_name' => $originalName,
+        ]);
+
         return [
             'success' => true,
-            'document' => $this->formatDocument($userId, $filename, $path, $fullPath),
+            'document' => $document,
         ];
     }
 
@@ -1022,6 +1048,25 @@ class PdfGalleryService
         );
 
         return array_values($filenames);
+    }
+
+    /**
+     * @param  array<string, mixed>  $document
+     * @param  array<string, mixed>  $context
+     */
+    private function notifyDocumentPersisted(string|int $userId, array $document, array $context = []): void
+    {
+        $handler = config('pdf-gallery.documents.persist_handler');
+
+        if (! is_callable($handler)) {
+            return;
+        }
+
+        try {
+            $handler($userId, $document, $context);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
