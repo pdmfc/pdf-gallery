@@ -87,7 +87,7 @@ const formatSize = (bytes) => {
 
 <template>
   <article
-    class="pdf-gallery-item group flex h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
+    class="pdf-gallery-item group flex h-12 max-w-full items-center gap-1 overflow-visible rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
     :class="[
       active ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200 hover:border-gray-300',
       selected ? 'border-blue-400 ring-1 ring-blue-100' : '',
@@ -292,6 +292,7 @@ const formatSize = (bytes) => {
   flex-shrink: 0;
   align-items: center;
   gap: 0.125rem;
+  margin-left: auto;
 }
 
 .pdf-gallery-item__btn--remove {
