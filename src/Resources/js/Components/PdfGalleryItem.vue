@@ -89,9 +89,7 @@ const formatSize = (bytes) => {
   <article
     class="pdf-gallery-item group grid h-12 items-center gap-1 rounded-lg border bg-white px-1 shadow-sm transition sm:h-[52px]"
     :class="[
-      canReorder
-        ? 'grid-cols-[auto_auto_minmax(0,1fr)_auto_auto]'
-        : 'grid-cols-[auto_minmax(0,1fr)_auto_auto]',
+      canReorder ? 'pdf-gallery-item--with-reorder' : 'pdf-gallery-item--without-reorder',
       active ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200 hover:border-gray-300',
       selected ? 'border-blue-400 ring-1 ring-blue-100' : '',
       isDragSource ? 'opacity-45' : 'hover:shadow',
@@ -225,6 +223,14 @@ const formatSize = (bytes) => {
 </template>
 
 <style scoped>
+.pdf-gallery-item--with-reorder {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+}
+
+.pdf-gallery-item--without-reorder {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
 .pdf-gallery-item__btn {
   all: unset;
   box-sizing: border-box;
