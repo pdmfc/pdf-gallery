@@ -66,29 +66,31 @@ function readProtectedFilenamesFromDataPage() {
 }
 
 function resolveProtectedFilenames(explicit, inertiaModule) {
+  const names = new Set()
+
   if (explicit != null) {
-    return parseProtectedFilenames(explicit)
+    parseProtectedFilenames(explicit).forEach((name) => names.add(name))
   }
 
   const fromNova = getNovaProtectedFilenames()
 
   if (fromNova !== null) {
-    return fromNova
+    fromNova.forEach((name) => names.add(name))
   }
 
   const fromDataPage = readProtectedFilenamesFromDataPage()
 
   if (fromDataPage !== null) {
-    return fromDataPage
+    fromDataPage.forEach((name) => names.add(name))
   }
 
   const fromInertia = getInertiaProtectedFilenames(inertiaModule)
 
   if (fromInertia !== null) {
-    return fromInertia
+    fromInertia.forEach((name) => names.add(name))
   }
 
-  return []
+  return [...names]
 }
 
 export function isGalleryFilenameProtected(filename, protectedFilenames) {
