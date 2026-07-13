@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch, onUnmounted, toRef } from 'vue'
+import { computed, ref, watch, onUnmounted, toRef } from 'vue'
 import PdfGallery from './PdfGallery.vue'
 import { usePdfGalleryUi } from '../composables/usePdfGalleryUi.js'
 
@@ -53,9 +53,15 @@ const props = defineProps({
     type: Array,
     default: null,
   },
+  primaryActionLabel: {
+    type: String,
+    default: null,
+  },
 })
 
-const emit = defineEmits(['update:open', 'close'])
+const emit = defineEmits(['update:open', 'close', 'primary-action'])
+
+const galleryRef = ref(null)
 
 const ui = usePdfGalleryUi(
   toRef(props, 'title'),
@@ -68,6 +74,17 @@ const modalTitle = computed(() => props.title || ui.value.title)
 const closeModal = () => {
   emit('update:open', false)
   emit('close')
+}
+
+const handlePrimaryAction = () => {
+  const target = galleryRef.value?.resolvePrimaryActionTarget?.()
+
+  if (!target || target.error) {
+    emit('primary-action', { error: target?.error ?? 'Seleccione o documento a enviar.' })
+    return
+  }
+
+  emit('primary-action', target)
 }
 
 watch(
@@ -100,19 +117,30 @@ onUnmounted(() => {
           {{ modalTitle }}
           <span v-if="subtitle" class="text-white/50"> — {{ subtitle }}</span>
         </p>
-        <button
-          type="button"
-          title="Fechar"
-          class="shrink-0 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
-          @click="closeModal"
-        >
-          Fechar
-        </button>
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            v-if="primaryActionLabel"
+            type="button"
+            class="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+            @click="handlePrimaryAction"
+          >
+            {{ primaryActionLabel }}
+          </button>
+          <button
+            type="button"
+            title="Fechar"
+            class="shrink-0 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+            @click="closeModal"
+          >
+            Fechar
+          </button>
+        </div>
       </header>
 
       <div class="min-h-0 flex-1 overflow-hidden pdf-gallery-root">
         <PdfGallery
           v-if="userId"
+          ref="galleryRef"
           as-modal
           :mode="mode"
           :user-id="userId"

@@ -1309,6 +1309,39 @@ onMounted(() => {
   loadDocuments()
 })
 
+const resolvePrimaryActionTarget = () => {
+  if (previewMode.value === 'merged') {
+    return {
+      error:
+        'Tem uma pré-visualização unida por gravar. Use «Gravar na galeria» antes de enviar, ou clique no documento que pretende usar.',
+    }
+  }
+
+  if (previewMode.value === 'single' && activeFilename.value) {
+    return { filename: activeFilename.value }
+  }
+
+  if (selectedFilenames.value.size === 1) {
+    return { filename: [...selectedFilenames.value][0] }
+  }
+
+  if (selectedFilenames.value.size > 1) {
+    return {
+      error:
+        'Seleccione um único documento para enviar: clique no ficheiro na lista (o documento activo na pré-visualização).',
+    }
+  }
+
+  return {
+    error:
+      'Seleccione o documento a enviar: clique no ficheiro na lista (pode ser o auto, um anexo ou um PDF já unido).',
+  }
+}
+
+defineExpose({
+  resolvePrimaryActionTarget,
+})
+
 onBeforeUnmount(() => {
   resetReorderDragState()
   revokeMergedUrl()
