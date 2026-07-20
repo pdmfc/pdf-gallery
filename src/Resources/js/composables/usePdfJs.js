@@ -1,12 +1,19 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
 import axios from '../http/client'
 
 let workerConfigured = false
+let workerObjectUrl = null
 
 function resolveWorkerSrc() {
-  // Servido pelo package via rota Laravel (não depende de ficheiro em public/).
-  // Evita o worker .mjs gerado pelo Vite em /build/assets.
-  return '/pdf-gallery/assets/pdf.worker.min.js'
+  // Embutir o worker no bundle (Vite ?raw) e expor via blob URL.
+  // Evita fetches a /build/assets/*.mjs ou rotas Laravel que falham no deploy.
+  if (!workerObjectUrl) {
+    const blob = new Blob([pdfWorkerSource], { type: 'text/javascript' })
+    workerObjectUrl = URL.createObjectURL(blob)
+  }
+
+  return workerObjectUrl
 }
 
 export function ensurePdfWorker() {

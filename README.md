@@ -70,12 +70,8 @@ npm install pdfjs-dist
 
 Também precisa de: `vue`, `@inertiajs/vue3`, `axios`, `tailwindcss` (para estilos do package).
 
-O PDF.js worker é servido pelo package em `/pdf-gallery/assets/pdf.worker.min.js` (rota Laravel).
-Opcionalmente pode publicar o ficheiro estático em `public/vendor/pdfjs`:
-
-```bash
-php artisan vendor:publish --tag=pdf-gallery-assets
-```
+O worker do PDF.js é embutido no bundle do host via Vite (`pdf.worker.min.mjs?raw` → blob URL),
+por isso **não** é necessário copiar ficheiros para `public/` nem rotas extra.
 
 ### Sistema operativo (recomendado)
 

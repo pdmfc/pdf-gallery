@@ -8,7 +8,6 @@ use Inertia\Inertia;
 use Laravel\Nova\Nova;
 use PDMFC\PdfGallery\Console\Commands\CheckToolsCommand;
 use PDMFC\PdfGallery\Http\Controllers\PdfGalleryController;
-use PDMFC\PdfGallery\Http\Controllers\PdfJsWorkerController;
 use PDMFC\PdfGallery\Services\Convert\FpdfImageConverter;
 use PDMFC\PdfGallery\Services\Convert\GhostscriptImageConverter;
 use PDMFC\PdfGallery\Services\Convert\GotenbergConverter;
@@ -70,23 +69,11 @@ class PdfGalleryServiceProvider extends ServiceProvider
             __DIR__.'/../stubs/nova-service-provider.php' => base_path('stubs/pdf-gallery-nova-service-provider.php'),
         ], 'pdf-gallery-nova');
 
-        $this->publishes([
-            __DIR__.'/../Resources/assets/vendor/pdfjs' => public_path('vendor/pdfjs'),
-        ], 'pdf-gallery-assets');
-
         if ($this->app->runningInConsole()) {
             $this->commands([
                 CheckToolsCommand::class,
             ]);
         }
-
-        // Serve the PDF.js worker from the package so hosts don't depend on a
-        // published static file under public/vendor/pdfjs (Vite ?url assets fail
-        // easily behind reverse proxies / incomplete builds).
-        // Path is under /pdf-gallery/... (not /vendor/...) so nginx static
-        // handling cannot short-circuit a missing public file with a raw 404.
-        Route::get('/pdf-gallery/assets/pdf.worker.min.js', PdfJsWorkerController::class)
-            ->name('pdf-gallery.pdfjs.worker');
 
         if (config('pdf-gallery.demo_routes', false)) {
             Route::middleware('web')->group(function () {
