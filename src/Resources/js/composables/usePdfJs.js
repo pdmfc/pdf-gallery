@@ -1,15 +1,25 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import axios from '../http/client'
 
 let workerConfigured = false
+
+function resolveWorkerSrc() {
+  const baseUrl = String(import.meta.env.BASE_URL ?? '/')
+  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+
+  // No host, o Vite build normalmente é servido a partir de `/build/`,
+  // mas o worker clássico costuma ficar em `/vendor/pdfjs/`.
+  const baseWithoutBuild = normalizedBaseUrl.replace(/\/build\/$/, '/')
+
+  return `${baseWithoutBuild}vendor/pdfjs/pdf.worker.min.js`
+}
 
 export function ensurePdfWorker() {
   if (workerConfigured || typeof window === 'undefined') {
     return pdfjsLib
   }
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = resolveWorkerSrc()
   workerConfigured = true
 
   return pdfjsLib
