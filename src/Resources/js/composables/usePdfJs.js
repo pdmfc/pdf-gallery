@@ -4,14 +4,9 @@ import axios from '../http/client'
 let workerConfigured = false
 
 function resolveWorkerSrc() {
-  const baseUrl = String(import.meta.env.BASE_URL ?? '/')
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
-
-  // No host, o Vite build normalmente é servido a partir de `/build/`,
-  // mas o worker clássico costuma ficar em `/vendor/pdfjs/`.
-  const baseWithoutBuild = normalizedBaseUrl.replace(/\/build\/$/, '/')
-
-  return `${baseWithoutBuild}vendor/pdfjs/pdf.worker.min.js`
+  // Servido pelo package via rota Laravel (não depende de ficheiro em public/).
+  // Evita o worker .mjs gerado pelo Vite em /build/assets.
+  return '/pdf-gallery/assets/pdf.worker.min.js'
 }
 
 export function ensurePdfWorker() {
