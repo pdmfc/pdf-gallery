@@ -16,6 +16,13 @@ import { usePdfGalleryConvertEnabled } from '../composables/usePdfGalleryConvert
 import { usePdfGalleryRealtime } from '../composables/usePdfGalleryRealtime.js'
 import { usePdfGalleryProtectedFilenames, isGalleryFilenameProtected } from '../composables/usePdfGalleryProtectedFilenames.js'
 import { formatDocumentCount, usePdfGalleryUi } from '../composables/usePdfGalleryUi.js'
+import {
+  usePdfGalleryGroups,
+  flatIndexForGroupItem,
+  resolveGroupInsertAt,
+  clampInsertAtToGroup,
+  reorderDocumentGroups,
+} from '../composables/usePdfGalleryGroups.js'
 
 const vEditorTooltipRoot = editorTooltipRoot
 
@@ -73,6 +80,12 @@ const props = defineProps({
     type: Array,
     default: null,
   },
+  /** auto: grouped when documents carry group_id; flat: never; grouped: always when group_id exists */
+  documentLayout: {
+    type: String,
+    default: 'auto',
+    validator: (value) => ['auto', 'flat', 'grouped'].includes(value),
+  },
 })
 
 const maxFiles = usePdfGalleryMaxFiles(toRef(props, 'maxFiles'))
@@ -110,9 +123,13 @@ const printing = ref(false)
 const mergedSourceFilenames = ref([])
 const dragOverUpload = ref(false)
 const galleryListRef = ref(null)
+const galleryGroupsListRef = ref(null)
 const reorderInsertAt = ref(null)
+const groupReorderInsertAt = ref(null)
 const reorderDragIndex = ref(null)
+const reorderDragGroupIndex = ref(null)
 const reorderDragFilename = ref('')
+const reorderDragScope = ref('item')
 const reorderPointerActive = ref(false)
 const reorderSaving = ref(false)
 const reorderDragPreview = ref({
@@ -256,6 +273,11 @@ const mergeOrderPreview = computed(() => {
 
 const isReordering = computed(() => reorderPointerActive.value)
 
+const { documentGroups, isGroupedLayout } = usePdfGalleryGroups(
+  documents,
+  toRef(props, 'documentLayout'),
+)
+
 const canSaveMerged = computed(
   () => isFullMode.value && previewMode.value === 'merged' && mergedSourceFilenames.value.length >= 2 && !savingMerged.value
 )
@@ -263,6 +285,104 @@ const canSaveMerged = computed(
 const canExtractPages = computed(
   () => isFullMode.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
 )
+
+const isTruthyFlag = (value) => {
+  if (value === true || value === 1) {
+    return true
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+
+    return normalized === 'true' || normalized === '1'
+  }
+
+  return false
+}
+
+const isFalsyFlag = (value) => {
+  if (value === false || value === 0) {
+    return true
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+
+    return normalized === 'false' || normalized === '0'
+  }
+
+  return false
+}
+
+const normalizeGalleryDocument = (document) => {
+  if (!document?.filename) {
+    return document
+  }
+
+  const normalized = { ...document }
+  const filenameProtected = isGalleryFilenameProtected(
+    normalized.filename,
+    protectedFilenames.value,
+  )
+
+  if (
+    isTruthyFlag(normalized.protected)
+    || isFalsyFlag(normalized.deletable)
+    || filenameProtected
+  ) {
+    normalized.protected = true
+    normalized.deletable = false
+  } else if (normalized.deletable === undefined && normalized.protected === undefined) {
+    normalized.deletable = true
+    normalized.protected = false
+  }
+
+  return normalized
+}
+
+const normalizeGalleryDocuments = (items) =>
+  (Array.isArray(items) ? items : []).map((document) => normalizeGalleryDocument(document))
+
+const isDocumentDeletable = (document) => {
+  const normalized = normalizeGalleryDocument(document)
+
+  if (!normalized?.filename) {
+    return false
+  }
+
+  if (isTruthyFlag(normalized.protected)) {
+    return false
+  }
+
+  if (isFalsyFlag(normalized.deletable)) {
+    return false
+  }
+
+  if (isGalleryFilenameProtected(normalized.filename, protectedFilenames.value)) {
+    return false
+  }
+
+  return true
+}
+
+const canRemoveDocument = (document) => {
+  if (!isFullMode.value && !isViewMode.value) {
+    return false
+  }
+
+  return isDocumentDeletable(document)
+}
+
+const canDeleteActiveDocument = computed(
+  () => (isFullMode.value || isViewMode.value) && isDocumentDeletable(activeDocument.value),
+)
+
+const filterDeletableFilenames = (filenames) =>
+  filenames.filter((filename) => {
+    const document = documents.value.find((item) => item.filename === filename)
+
+    return isDocumentDeletable(document)
+  })
 
 const isTruthyFlag = (value) => {
   if (value === true || value === 1) {
@@ -742,8 +862,11 @@ const onNotificationCancel = () => {
 
 const resetReorderDragState = () => {
   reorderDragIndex.value = null
+  reorderDragGroupIndex.value = null
   reorderDragFilename.value = ''
   reorderInsertAt.value = null
+  groupReorderInsertAt.value = null
+  reorderDragScope.value = 'item'
   reorderPointerActive.value = false
   reorderDragPreview.value = {
     visible: false,
@@ -773,7 +896,13 @@ const resolveReorderInsertAt = (clientY, listEl) => {
   return items.length
 }
 
-const isInReorderDragBlock = (filename) => {
+const isInReorderDragBlock = (filename, groupId = null) => {
+  if (reorderDragScope.value === 'group' && groupId && reorderDragGroupIndex.value !== null) {
+    const groups = documentGroups.value
+
+    return groups?.[reorderDragGroupIndex.value]?.id === groupId
+  }
+
   if (reorderDragFilename.value) {
     return reorderDragFilename.value === filename
   }
@@ -809,20 +938,26 @@ const persistReorder = async (nextDocuments) => {
   }
 }
 
-const applyReorderMove = async (fromIndex, insertAt) => {
+const applyReorderMove = async (fromIndex, insertAt, groupId = null) => {
   if (fromIndex === null || insertAt === null) {
     return false
   }
 
-  if (insertAt === fromIndex || insertAt === fromIndex + 1) {
+  let targetInsertAt = insertAt
+
+  if (groupId) {
+    targetInsertAt = clampInsertAtToGroup(documents.value, groupId, insertAt)
+  }
+
+  if (targetInsertAt === fromIndex || targetInsertAt === fromIndex + 1) {
     return false
   }
 
   const updated = [...documents.value]
   const [item] = updated.splice(fromIndex, 1)
-  let target = insertAt
+  let target = targetInsertAt
 
-  if (fromIndex < insertAt) {
+  if (fromIndex < targetInsertAt) {
     target -= 1
   }
 
@@ -833,17 +968,37 @@ const applyReorderMove = async (fromIndex, insertAt) => {
   return true
 }
 
-const startReorderPointerDrag = (index, event) => {
+const applyGroupReorderMove = async (fromGroupIndex, insertAtGroupIndex) => {
+  const nextDocuments = reorderDocumentGroups(
+    documents.value,
+    fromGroupIndex,
+    insertAtGroupIndex,
+  )
+
+  if (nextDocuments === documents.value) {
+    return false
+  }
+
+  documents.value = nextDocuments
+  await persistReorder(nextDocuments)
+
+  return true
+}
+
+const startReorderPointerDrag = (index, event, groupId = null, groupIndex = null, listOverride = null) => {
   if (event.pointerType === 'mouse' && event.button !== 0) {
     return
   }
 
-  const listEl = galleryListRef.value
+  const listEl = listOverride || galleryListRef.value
   const document = documents.value[index]
 
   if (!listEl || !document) {
     return
   }
+
+  reorderDragScope.value = 'item'
+  const useGroupList = Boolean(groupId && groupIndex !== null && listOverride && isGroupedLayout.value)
 
   const startX = event.clientX
   const startY = event.clientY
@@ -883,7 +1038,18 @@ const startReorderPointerDrag = (index, event) => {
       x: moveEvent.clientX,
       y: moveEvent.clientY,
     }
-    reorderInsertAt.value = resolveReorderInsertAt(moveEvent.clientY, listEl)
+
+    const nextInsertAt = resolveReorderInsertAt(moveEvent.clientY, listEl)
+
+    if (useGroupList) {
+      const relativeInsertAt = Math.max(
+        0,
+        Math.min(nextInsertAt, documentGroups.value[groupIndex].documents.length),
+      )
+      reorderInsertAt.value = flatIndexForGroupItem(documentGroups.value, groupIndex, 0) + relativeInsertAt
+    } else {
+      reorderInsertAt.value = nextInsertAt
+    }
   }
 
   const onUp = async (upEvent) => {
@@ -891,15 +1057,24 @@ const startReorderPointerDrag = (index, event) => {
     window.removeEventListener('pointerup', onUp)
     window.removeEventListener('pointercancel', onUp)
 
-    const insertAt = resolveReorderInsertAt(upEvent.clientY, listEl)
+    let insertAt = resolveReorderInsertAt(upEvent.clientY, listEl)
     const fromIndex = index
     const didMove = moved
+
+    if (useGroupList) {
+      const groups = documentGroups.value
+      const relativeInsertAt = Math.max(
+        0,
+        Math.min(insertAt, groups[groupIndex].documents.length),
+      )
+      insertAt = flatIndexForGroupItem(groups, groupIndex, 0) + relativeInsertAt
+    }
 
     reorderPointerActive.value = false
     resetReorderDragState()
 
     if (didMove) {
-      await applyReorderMove(fromIndex, insertAt)
+      await applyReorderMove(fromIndex, insertAt, groupId)
     }
   }
 
@@ -909,12 +1084,108 @@ const startReorderPointerDrag = (index, event) => {
   event.preventDefault()
 }
 
-const onReorderPointerDown = (index, event) => {
+const onReorderPointerDown = (index, event, groupId = null) => {
   if (documents.value.length < 2) {
     return
   }
 
-  startReorderPointerDrag(index, event)
+  startReorderPointerDrag(index, event, groupId)
+}
+
+const onGroupItemReorderPointerDown = (groupIndex, itemIndex, event) => {
+  const groups = documentGroups.value
+  const group = groups?.[groupIndex]
+
+  if (!group || group.documents.length < 2) {
+    return
+  }
+
+  const flatIndex = flatIndexForGroupItem(groups, groupIndex, itemIndex)
+  const listEl = event.currentTarget?.closest('ul[data-group-item-list]')
+  startReorderPointerDrag(flatIndex, event, group.id, groupIndex, listEl)
+}
+
+const startGroupReorderPointerDrag = (groupIndex, event) => {
+  if (event.pointerType === 'mouse' && event.button !== 0) {
+    return
+  }
+
+  const groups = documentGroups.value
+  const group = groups?.[groupIndex]
+  const listEl = galleryGroupsListRef.value
+
+  if (!listEl || !group || (groups?.length || 0) < 2) {
+    return
+  }
+
+  const startX = event.clientX
+  const startY = event.clientY
+  let moved = false
+
+  reorderDragScope.value = 'group'
+  reorderDragGroupIndex.value = groupIndex
+  groupReorderInsertAt.value = groupIndex
+  reorderDragPreview.value = {
+    visible: false,
+    x: startX,
+    y: startY,
+    thumbUrl: group.documents[0]?.thumb_url
+      ? `${group.documents[0].thumb_url}?v=${group.documents[0].timestamp || 0}`
+      : '',
+    filename: group.label,
+  }
+
+  const headerElements = () =>
+    listEl.querySelectorAll('[data-group-reorder-item]')
+
+  const onMove = (moveEvent) => {
+    if (
+      !moved &&
+      (Math.abs(moveEvent.clientY - startY) > 6 || Math.abs(moveEvent.clientX - startX) > 6)
+    ) {
+      moved = true
+      reorderPointerActive.value = true
+    }
+
+    if (!moved) {
+      return
+    }
+
+    moveEvent.preventDefault()
+    reorderDragPreview.value = {
+      ...reorderDragPreview.value,
+      visible: true,
+      x: moveEvent.clientX,
+      y: moveEvent.clientY,
+    }
+    groupReorderInsertAt.value = resolveGroupInsertAt(moveEvent.clientY, headerElements())
+  }
+
+  const onUp = async (upEvent) => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onUp)
+
+    const insertAt = resolveGroupInsertAt(upEvent.clientY, headerElements())
+    const fromGroupIndex = groupIndex
+    const didMove = moved
+
+    reorderPointerActive.value = false
+    resetReorderDragState()
+
+    if (didMove) {
+      await applyGroupReorderMove(fromGroupIndex, insertAt)
+    }
+  }
+
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onUp)
+  event.preventDefault()
+}
+
+const onGroupReorderPointerDown = (groupIndex, event) => {
+  startGroupReorderPointerDrag(groupIndex, event)
 }
 
 const parseMergeApiError = async (error, fallback) => {
@@ -1488,7 +1759,12 @@ onBeforeUnmount(() => {
 
         <div v-if="isFullMode && isReordering" class="mt-2 space-y-1">
           <p class="text-[10px] leading-snug text-violet-700">
-            Arraste pelos pontos à esquerda; a barra azul indica a posição.
+            <template v-if="isGroupedLayout">
+              Arraste os autos pelos pontos do cabeçalho; reordene anexos dentro de cada auto.
+            </template>
+            <template v-else>
+              Arraste pelos pontos à esquerda; a barra azul indica a posição.
+            </template>
             <span v-if="reorderSaving" class="text-violet-500"> A guardar…</span>
           </p>
         </div>
@@ -1530,7 +1806,10 @@ onBeforeUnmount(() => {
           v-else-if="documents.length > 1"
           class="mt-2 text-[10px] leading-snug text-gray-500"
         >
-          <template v-if="isFullMode">
+          <template v-if="isFullMode && isGroupedLayout">
+            Reordene autos e anexos pelos pontos · clique na miniatura para pré-visualizar
+          </template>
+          <template v-else-if="isFullMode">
             Pontos à esquerda para reordenar · ícone de eliminar em cada ficheiro · clique na miniatura para pré-visualizar
           </template>
           <template v-else>
@@ -1558,6 +1837,107 @@ onBeforeUnmount(() => {
           <template v-if="isFullMode"> Carregue um ficheiro ou arraste para esta área.</template>
         </p>
         <ul
+          v-else-if="isGroupedLayout"
+          ref="galleryGroupsListRef"
+          class="space-y-3"
+        >
+          <template v-for="(group, groupIndex) in documentGroups" :key="group.id">
+            <li
+              v-if="groupReorderInsertAt === groupIndex"
+              class="pointer-events-none flex items-center px-1 py-px"
+              aria-hidden="true"
+            >
+              <span class="h-0.5 flex-1 rounded-full bg-blue-500 shadow-sm" />
+            </li>
+            <li
+              data-group-reorder-item
+              class="rounded-lg border border-gray-200 bg-gray-50/80 transition"
+              :class="{ 'opacity-45': isInReorderDragBlock('', group.id) }"
+            >
+              <div class="flex items-center gap-2 px-2 py-1.5">
+                <button
+                  v-if="isFullMode && (documentGroups?.length || 0) > 1"
+                  type="button"
+                  class="pdf-gallery-item__btn pdf-gallery-item__btn--reorder shrink-0"
+                  aria-label="Arrastar auto para reordenar"
+                  @click.stop
+                  @pointerdown.stop="onGroupReorderPointerDown(groupIndex, $event)"
+                >
+                  <svg class="h-4 w-2.5" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true">
+                    <circle cx="2" cy="2" r="1.25" />
+                    <circle cx="6" cy="2" r="1.25" />
+                    <circle cx="2" cy="7" r="1.25" />
+                    <circle cx="6" cy="7" r="1.25" />
+                    <circle cx="2" cy="12" r="1.25" />
+                    <circle cx="6" cy="12" r="1.25" />
+                  </svg>
+                </button>
+                <p class="min-w-0 flex-1 truncate text-xs font-semibold text-gray-700">
+                  {{ group.label }}
+                </p>
+                <span class="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                  {{ group.documents.length }}
+                </span>
+              </div>
+              <ul
+                data-group-item-list
+                class="space-y-1.5 px-2 pb-2"
+              >
+                <template v-for="(document, itemIndex) in group.documents" :key="document.filename">
+                  <li
+                    v-if="reorderInsertAt === flatIndexForGroupItem(documentGroups, groupIndex, itemIndex)"
+                    class="pointer-events-none flex items-center px-1 py-px"
+                    aria-hidden="true"
+                  >
+                    <span class="h-0.5 flex-1 rounded-full bg-blue-500 shadow-sm" />
+                  </li>
+                  <li
+                    data-reorder-item
+                    class="rounded-lg transition"
+                    :class="{ 'opacity-45': isInReorderDragBlock(document.filename) }"
+                  >
+                    <PdfGalleryItem
+                      :url="document.url || ''"
+                      :thumb-url="document.thumb_url ? `${document.thumb_url}?v=${document.timestamp || 0}` : ''"
+                      :filename="document.filename"
+                      :label="document.label || ''"
+                      :kind="document.kind || 'pdf'"
+                      :selected="selectedFilenames.has(document.filename)"
+                      :active="activeFilename === document.filename && previewMode === 'single'"
+                      :order-index="flatIndexForGroupItem(documentGroups, groupIndex, itemIndex)"
+                      :page-count="document.page_count"
+                      :size-bytes="document.size_bytes"
+                      :is-drag-source="isInReorderDragBlock(document.filename)"
+                      :can-reorder="isFullMode && group.documents.length > 1"
+                      :show-select="documents.length > 0"
+                      :show-remove="canRemoveDocument(document)"
+                      :show-order-badge="isFullMode"
+                      @toggle-select="toggleSelect(document.filename)"
+                      @open="openDocument(document.filename)"
+                      @remove="requestDeleteConfirmation([document.filename])"
+                      @reorder-pointer-down="onGroupItemReorderPointerDown(groupIndex, itemIndex, $event)"
+                    />
+                  </li>
+                </template>
+                <li
+                  v-if="reorderInsertAt === flatIndexForGroupItem(documentGroups, groupIndex, group.documents.length)"
+                  class="pointer-events-none flex items-center px-1 py-px"
+                  aria-hidden="true"
+                >
+                  <span class="h-0.5 flex-1 rounded-full bg-blue-500 shadow-sm" />
+                </li>
+              </ul>
+            </li>
+          </template>
+          <li
+            v-if="groupReorderInsertAt === (documentGroups?.length || 0)"
+            class="pointer-events-none flex items-center px-1 py-px"
+            aria-hidden="true"
+          >
+            <span class="h-0.5 flex-1 rounded-full bg-blue-500 shadow-sm" />
+          </li>
+        </ul>
+        <ul
           v-else
           ref="galleryListRef"
           class="space-y-1.5"
@@ -1579,6 +1959,7 @@ onBeforeUnmount(() => {
                 :url="document.url || ''"
                 :thumb-url="document.thumb_url ? `${document.thumb_url}?v=${document.timestamp || 0}` : ''"
                 :filename="document.filename"
+                :label="document.label || ''"
                 :label="document.label || ''"
                 :kind="document.kind || 'pdf'"
                 :selected="selectedFilenames.has(document.filename)"
