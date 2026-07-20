@@ -384,104 +384,6 @@ const filterDeletableFilenames = (filenames) =>
     return isDocumentDeletable(document)
   })
 
-const isTruthyFlag = (value) => {
-  if (value === true || value === 1) {
-    return true
-  }
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-
-    return normalized === 'true' || normalized === '1'
-  }
-
-  return false
-}
-
-const isFalsyFlag = (value) => {
-  if (value === false || value === 0) {
-    return true
-  }
-
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-
-    return normalized === 'false' || normalized === '0'
-  }
-
-  return false
-}
-
-const normalizeGalleryDocument = (document) => {
-  if (!document?.filename) {
-    return document
-  }
-
-  const normalized = { ...document }
-  const filenameProtected = isGalleryFilenameProtected(
-    normalized.filename,
-    protectedFilenames.value,
-  )
-
-  if (
-    isTruthyFlag(normalized.protected)
-    || isFalsyFlag(normalized.deletable)
-    || filenameProtected
-  ) {
-    normalized.protected = true
-    normalized.deletable = false
-  } else if (normalized.deletable === undefined && normalized.protected === undefined) {
-    normalized.deletable = true
-    normalized.protected = false
-  }
-
-  return normalized
-}
-
-const normalizeGalleryDocuments = (items) =>
-  (Array.isArray(items) ? items : []).map((document) => normalizeGalleryDocument(document))
-
-const isDocumentDeletable = (document) => {
-  const normalized = normalizeGalleryDocument(document)
-
-  if (!normalized?.filename) {
-    return false
-  }
-
-  if (isTruthyFlag(normalized.protected)) {
-    return false
-  }
-
-  if (isFalsyFlag(normalized.deletable)) {
-    return false
-  }
-
-  if (isGalleryFilenameProtected(normalized.filename, protectedFilenames.value)) {
-    return false
-  }
-
-  return true
-}
-
-const canRemoveDocument = (document) => {
-  if (!isFullMode.value && !isViewMode.value) {
-    return false
-  }
-
-  return isDocumentDeletable(document)
-}
-
-const canDeleteActiveDocument = computed(
-  () => (isFullMode.value || isViewMode.value) && isDocumentDeletable(activeDocument.value),
-)
-
-const filterDeletableFilenames = (filenames) =>
-  filenames.filter((filename) => {
-    const document = documents.value.find((item) => item.filename === filename)
-
-    return isDocumentDeletable(document)
-  })
-
 const applySavedDocument = (document) => {
   const normalized = normalizeGalleryDocument(document)
 
@@ -1960,8 +1862,7 @@ onBeforeUnmount(() => {
                 :thumb-url="document.thumb_url ? `${document.thumb_url}?v=${document.timestamp || 0}` : ''"
                 :filename="document.filename"
                 :label="document.label || ''"
-                :label="document.label || ''"
-                :kind="document.kind || 'pdf'"
+                                :kind="document.kind || 'pdf'"
                 :selected="selectedFilenames.has(document.filename)"
                 :active="activeFilename === document.filename && previewMode === 'single'"
                 :order-index="index"
