@@ -53,9 +53,18 @@ const props = defineProps({
     type: Array,
     default: null,
   },
+  documentLayout: {
+    type: String,
+    default: 'auto',
+    validator: (value) => ['auto', 'flat', 'grouped'].includes(value),
+  },
   primaryActionLabel: {
     type: String,
     default: null,
+  },
+  primaryActionRequiresDocument: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -151,6 +160,7 @@ onUnmounted(() => {
           :document-singular="ui.documentSingular"
           :document-plural="ui.documentPlural"
           :protected-filenames="protectedFilenames"
+          :document-layout="documentLayout"
         />
       </div>
     </div>
