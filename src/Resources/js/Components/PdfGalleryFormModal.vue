@@ -86,6 +86,13 @@ const closeModal = () => {
 }
 
 const handlePrimaryAction = () => {
+  // When the host does not require a selected document (e.g. coordinator review),
+  // continue without treating "no selection" as a blocking error.
+  if (!props.primaryActionRequiresDocument) {
+    emit('primary-action', {})
+    return
+  }
+
   const target = galleryRef.value?.resolvePrimaryActionTarget?.()
 
   if (!target || target.error) {
