@@ -5,6 +5,8 @@ return [
         'disk' => env('PDF_GALLERY_DISK', 'public'),
         'path' => env('PDF_GALLERY_STORAGE_PATH', 'pdfs/tmp'),
         'directory_resolver' => null,
+        /** Optional: (scopeId, filename) => relative disk path for a virtual/multi-root document. */
+        'file_path_resolver' => null,
     ],
 
     'routes' => [
@@ -64,6 +66,8 @@ return [
         'persist_handler' => null,
         'delete_handler' => null,
         'reorder_handler' => null,
+        /** Optional: (scopeId) => list<string|array{filename: string}> replacing directory scan. */
+        'list_handler' => null,
     ],
 
     'merge' => [

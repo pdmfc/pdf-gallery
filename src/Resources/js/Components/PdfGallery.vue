@@ -91,6 +91,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /**
+   * When false, hide upload / QR / delete / merge-save (select + reorder + preview remain).
+   * Used by dispatch galleries that read auto folders without mutating them.
+   */
+  mutationsEnabled: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const maxFiles = usePdfGalleryMaxFiles(toRef(props, 'maxFiles'))
@@ -109,6 +117,7 @@ const docLabel = (count) => formatDocumentCount(count, ui.value)
 
 const isViewMode = computed(() => props.mode === 'view')
 const isFullMode = computed(() => !isViewMode.value)
+const canMutateDocuments = computed(() => isFullMode.value && props.mutationsEnabled !== false)
 
 const api = usePdfGalleryApi()
 const { notification, showNotification, dismissNotification } = useEditorNotification()
@@ -284,11 +293,11 @@ const { documentGroups, isGroupedLayout } = usePdfGalleryGroups(
 )
 
 const canSaveMerged = computed(
-  () => isFullMode.value && previewMode.value === 'merged' && mergedSourceFilenames.value.length >= 2 && !savingMerged.value
+  () => canMutateDocuments.value && previewMode.value === 'merged' && mergedSourceFilenames.value.length >= 2 && !savingMerged.value
 )
 
 const canExtractPages = computed(
-  () => isFullMode.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
+  () => canMutateDocuments.value && previewMode.value === 'single' && activeDocument.value?.kind === 'pdf'
 )
 
 const isTruthyFlag = (value) => {
@@ -371,6 +380,10 @@ const isDocumentDeletable = (document) => {
 }
 
 const canRemoveDocument = (document) => {
+  if (!canMutateDocuments.value) {
+    return false
+  }
+
   if (!isFullMode.value && !isViewMode.value) {
     return false
   }
@@ -379,7 +392,7 @@ const canRemoveDocument = (document) => {
 }
 
 const canDeleteActiveDocument = computed(
-  () => (isFullMode.value || isViewMode.value) && isDocumentDeletable(activeDocument.value),
+  () => canMutateDocuments.value && (isFullMode.value || isViewMode.value) && isDocumentDeletable(activeDocument.value),
 )
 
 const filterDeletableFilenames = (filenames) =>
@@ -1590,7 +1603,7 @@ onBeforeUnmount(() => {
 
     <aside class="flex min-h-0 w-64 shrink-0 flex-col border-r border-gray-200 bg-white sm:w-72">
       <div class="flex flex-wrap justify-center gap-1.5 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
-        <template v-if="isFullMode">
+        <template v-if="canMutateDocuments">
         <label
           :title="uploadTitle"
           class="toolbar-icon-btn cursor-pointer"
@@ -1654,7 +1667,7 @@ onBeforeUnmount(() => {
           </svg>
         </button>
 
-        <template v-if="isFullMode">
+        <template v-if="canMutateDocuments">
         <button
           type="button"
           :title="`Juntar ${ui.documentPlural} seleccionados`"
@@ -1733,7 +1746,7 @@ onBeforeUnmount(() => {
               Limpar
             </button>
             <button
-              v-if="selectedDeletableCount > 0"
+              v-if="canMutateDocuments && selectedDeletableCount > 0"
               type="button"
               aria-label="Eliminar seleccionados"
               class="pdf-gallery-action-btn pdf-gallery-action-btn--danger"
@@ -1762,11 +1775,11 @@ onBeforeUnmount(() => {
 
       <div
         class="min-h-0 flex-1 overflow-y-auto p-2"
-        :class="isFullMode && dragOverUpload ? 'bg-blue-50/60' : ''"
-        @dragenter.prevent="onUploadDragOver"
-        @dragover.prevent="onUploadDragOver"
-        @dragleave.prevent="onUploadDragLeave"
-        @drop.prevent="onUploadDrop"
+        :class="canMutateDocuments && dragOverUpload ? 'bg-blue-50/60' : ''"
+        @dragenter.prevent="canMutateDocuments && onUploadDragOver($event)"
+        @dragover.prevent="canMutateDocuments && onUploadDragOver($event)"
+        @dragleave.prevent="canMutateDocuments && onUploadDragLeave($event)"
+        @drop.prevent="canMutateDocuments && onUploadDrop($event)"
       >
         <div v-if="loading && documents.length === 0" class="flex justify-center py-8">
           <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
@@ -1776,7 +1789,7 @@ onBeforeUnmount(() => {
           class="px-2 py-6 text-center text-sm text-gray-500"
         >
           Nenhum {{ ui.documentSingular }}.
-          <template v-if="isFullMode"> Carregue um ficheiro ou arraste para esta área.</template>
+          <template v-if="canMutateDocuments"> Carregue um ficheiro ou arraste para esta área.</template>
         </p>
         <ul
           v-else-if="isGroupedLayout"

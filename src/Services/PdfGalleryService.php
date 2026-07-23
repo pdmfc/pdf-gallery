@@ -27,10 +27,47 @@ class PdfGalleryService
     {
         try {
             $this->storage->ensureDirectory($userId);
+            $documents = [];
+
+            $listHandler = config('pdf-gallery.documents.list_handler');
+
+            if (is_callable($listHandler)) {
+                $listed = $listHandler($userId);
+
+                if (is_array($listed)) {
+                    foreach ($listed as $item) {
+                        $filename = is_array($item)
+                            ? basename((string) ($item['filename'] ?? ''))
+                            : $this->storage->safeFilename((string) $item);
+
+                        if ($filename === '' || ! GalleryDocument::isListable($filename)) {
+                            continue;
+                        }
+
+                        $path = $this->storage->filePath($userId, $filename);
+                        $fullPath = $this->storage->storagePath($userId, $filename);
+                        $document = $this->formatDocument($userId, $filename, $path, $fullPath);
+
+                        if (is_array($item)) {
+                            $document = array_merge($document, array_diff_key($item, ['filename' => true]));
+                            $document['filename'] = $filename;
+                        }
+
+                        $documents[] = $document;
+                    }
+
+                    $documents = $this->sortByGalleryOrder($userId, $documents);
+                    $documents = $this->enrichDocuments($userId, $documents);
+                    $documents = $this->applyProtectedDocumentFlags($documents);
+                    $documents = $this->filterDocuments($userId, $documents);
+
+                    return ['documents' => $documents];
+                }
+            }
+
             $dir = $this->storage->directory($userId);
             $disk = Storage::disk($this->storage->disk());
             $files = $disk->files($dir);
-            $documents = [];
 
             foreach ($files as $file) {
                 $filename = basename($file);

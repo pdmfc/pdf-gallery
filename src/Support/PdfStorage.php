@@ -61,7 +61,18 @@ class PdfStorage
 
     public function filePath(string|int $userId, string $filename): string
     {
-        return $this->directory($userId).'/'.$this->safeFilename($filename);
+        $filename = $this->safeFilename($filename);
+        $resolver = config('pdf-gallery.storage.file_path_resolver');
+
+        if (is_callable($resolver)) {
+            $resolved = $resolver($userId, $filename);
+
+            if (is_string($resolved) && $resolved !== '') {
+                return trim($resolved, '/');
+            }
+        }
+
+        return $this->directory($userId).'/'.$filename;
     }
 
     public function storagePath(string|int $userId, string $filename): string

@@ -75,6 +75,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  mutationsEnabled: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const emit = defineEmits(['update:open', 'close', 'primary-action'])
@@ -192,6 +196,7 @@ onUnmounted(() => {
           :protected-filenames="protectedFilenames"
           :document-layout="documentLayout"
           :select-all-on-load="selectAllOnLoad"
+          :mutations-enabled="mutationsEnabled"
         />
       </div>
     </div>
