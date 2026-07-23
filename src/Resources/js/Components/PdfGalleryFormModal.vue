@@ -66,6 +66,15 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /** Emit the current multi-selection ({ filenames }) instead of a single document. */
+  primaryActionRequiresSelection: {
+    type: Boolean,
+    default: false,
+  },
+  selectAllOnLoad: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:open', 'close', 'primary-action'])
@@ -86,6 +95,20 @@ const closeModal = () => {
 }
 
 const handlePrimaryAction = () => {
+  if (props.primaryActionRequiresSelection) {
+    const selection = galleryRef.value?.resolvePrimaryActionSelection?.()
+
+    if (!selection || selection.error) {
+      emit('primary-action', {
+        error: selection?.error ?? 'Seleccione pelo menos um documento para continuar.',
+      })
+      return
+    }
+
+    emit('primary-action', selection)
+    return
+  }
+
   // When the host does not require a selected document (e.g. coordinator review),
   // continue without treating "no selection" as a blocking error.
   if (!props.primaryActionRequiresDocument) {
@@ -168,6 +191,7 @@ onUnmounted(() => {
           :document-plural="ui.documentPlural"
           :protected-filenames="protectedFilenames"
           :document-layout="documentLayout"
+          :select-all-on-load="selectAllOnLoad"
         />
       </div>
     </div>

@@ -326,6 +326,12 @@ class PdfGalleryService
 
             $this->storage->writeGalleryOrder($userId, $requested);
 
+            $reorderHandler = config('pdf-gallery.documents.reorder_handler');
+
+            if (is_callable($reorderHandler)) {
+                $reorderHandler($userId, $requested);
+            }
+
             return ['success' => true];
         } catch (\Throwable $e) {
             return ['error' => $e->getMessage()];

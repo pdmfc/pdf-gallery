@@ -63,6 +63,7 @@ return [
         'filter' => null,
         'persist_handler' => null,
         'delete_handler' => null,
+        'reorder_handler' => null,
     ],
 
     'merge' => [

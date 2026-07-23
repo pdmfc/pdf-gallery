@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import PdfGalleryItem from './PdfGalleryItem.vue'
 import PdfPreviewPanel from './PdfPreviewPanel.vue'
 import EditorTooltipLayer from './EditorTooltipLayer.vue'
@@ -85,6 +85,11 @@ const props = defineProps({
     type: String,
     default: 'auto',
     validator: (value) => ['auto', 'flat', 'grouped'].includes(value),
+  },
+  /** When true, select every document after the initial list load. */
+  selectAllOnLoad: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -422,6 +427,14 @@ const syncSelectionAfterListChange = () => {
   }
 }
 
+const selectAllDocuments = () => {
+  selectedFilenames.value = new Set(
+    documents.value
+      .map((document) => document.filename)
+      .filter((filename) => typeof filename === 'string' && filename !== ''),
+  )
+}
+
 const loadDocuments = async () => {
   loading.value = true
 
@@ -433,7 +446,21 @@ const loadDocuments = async () => {
     }
 
     documents.value = normalizeGalleryDocuments(data.documents)
-    syncSelectionAfterListChange()
+
+    if (props.selectAllOnLoad) {
+      selectAllDocuments()
+      await nextTick()
+
+      // Guard against a render race where the first paint still had an empty selection.
+      if (
+        documents.value.length > 0
+        && selectedFilenames.value.size !== documents.value.length
+      ) {
+        selectAllDocuments()
+      }
+    } else {
+      syncSelectionAfterListChange()
+    }
 
     if (!activeFilename.value && documents.value.length > 0) {
       activeFilename.value = documents.value[0].filename
@@ -467,7 +494,7 @@ const toggleSelectAll = () => {
     return
   }
 
-  selectedFilenames.value = new Set(documents.value.map((document) => document.filename))
+  selectAllDocuments()
 }
 
 const clearSelection = () => {
@@ -1511,8 +1538,21 @@ const resolvePrimaryActionTarget = () => {
   }
 }
 
+const resolvePrimaryActionSelection = () => {
+  const filenames = selectedFilenamesInGalleryOrder()
+
+  if (filenames.length === 0) {
+    return {
+      error: 'Seleccione pelo menos um documento para continuar.',
+    }
+  }
+
+  return { filenames }
+}
+
 defineExpose({
   resolvePrimaryActionTarget,
+  resolvePrimaryActionSelection,
 })
 
 onBeforeUnmount(() => {
