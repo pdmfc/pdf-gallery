@@ -1,7 +1,9 @@
 <script setup>
-import { computed, ref, watch, onUnmounted, toRef } from 'vue'
+import { computed, ref, watch, onUnmounted, toRef, useSlots } from 'vue'
 import PdfGallery from './PdfGallery.vue'
 import { usePdfGalleryUi } from '../composables/usePdfGalleryUi.js'
+
+const slots = useSlots()
 
 const props = defineProps({
   open: {
@@ -79,9 +81,23 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  /** Show the optional right-hand panel (slot `right-panel`) beside the gallery. */
+  rightPanelOpen: {
+    type: Boolean,
+    default: false,
+  },
+  /** Tailwind width classes for the right panel (e.g. `w-full max-w-md`). */
+  rightPanelClass: {
+    type: String,
+    default: 'w-full max-w-md',
+  },
 })
 
 const emit = defineEmits(['update:open', 'close', 'primary-action'])
+
+const showRightPanel = computed(
+  () => props.rightPanelOpen && typeof slots['right-panel'] === 'function'
+)
 
 const galleryRef = ref(null)
 
@@ -180,24 +196,35 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <div class="min-h-0 flex-1 overflow-hidden pdf-gallery-root">
-        <PdfGallery
-          v-if="userId"
-          ref="galleryRef"
-          as-modal
-          :mode="mode"
-          :user-id="userId"
-          :max-files="maxFiles"
-          :max-upload-mb="maxUploadMb"
-          :merge-max-files="mergeMaxFiles"
-          :title="modalTitle"
-          :document-singular="ui.documentSingular"
-          :document-plural="ui.documentPlural"
-          :protected-filenames="protectedFilenames"
-          :document-layout="documentLayout"
-          :select-all-on-load="selectAllOnLoad"
-          :mutations-enabled="mutationsEnabled"
-        />
+      <div class="flex min-h-0 flex-1 overflow-hidden">
+        <div class="min-h-0 min-w-0 flex-1 overflow-hidden pdf-gallery-root">
+          <PdfGallery
+            v-if="userId"
+            ref="galleryRef"
+            as-modal
+            :mode="mode"
+            :user-id="userId"
+            :max-files="maxFiles"
+            :max-upload-mb="maxUploadMb"
+            :merge-max-files="mergeMaxFiles"
+            :title="modalTitle"
+            :document-singular="ui.documentSingular"
+            :document-plural="ui.documentPlural"
+            :protected-filenames="protectedFilenames"
+            :document-layout="documentLayout"
+            :select-all-on-load="selectAllOnLoad"
+            :mutations-enabled="mutationsEnabled"
+          />
+        </div>
+
+        <aside
+          v-if="showRightPanel"
+          class="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-white/10 bg-white"
+          :class="rightPanelClass"
+          role="complementary"
+        >
+          <slot name="right-panel" />
+        </aside>
       </div>
     </div>
   </Teleport>
