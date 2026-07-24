@@ -1,9 +1,7 @@
 <script setup>
-import { computed, ref, watch, onUnmounted, toRef, useSlots } from 'vue'
+import { computed, ref, watch, onUnmounted, toRef } from 'vue'
 import PdfGallery from './PdfGallery.vue'
 import { usePdfGalleryUi } from '../composables/usePdfGalleryUi.js'
-
-const slots = useSlots()
 
 const props = defineProps({
   open: {
@@ -86,20 +84,40 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  /** Tailwind width classes for the right panel (e.g. `w-full max-w-md`). */
+  /** Extra Tailwind classes for the right panel (width is controlled separately). */
   rightPanelClass: {
     type: String,
-    default: 'w-full max-w-md',
+    default: '',
+  },
+  /** Allow dragging the left edge to resize the right panel. */
+  rightPanelResizable: {
+    type: Boolean,
+    default: true,
+  },
+  /** Initial width in pixels. */
+  rightPanelDefaultWidth: {
+    type: Number,
+    default: 448,
+  },
+  rightPanelMinWidth: {
+    type: Number,
+    default: 320,
+  },
+  /** Max width in px; when null, caps at 70% of the viewport. */
+  rightPanelMaxWidth: {
+    type: Number,
+    default: null,
   },
 })
 
 const emit = defineEmits(['update:open', 'close', 'primary-action'])
 
-const showRightPanel = computed(
-  () => props.rightPanelOpen && typeof slots['right-panel'] === 'function'
-)
-
 const galleryRef = ref(null)
+const panelWidth = ref(props.rightPanelDefaultWidth)
+const isResizing = ref(false)
+
+let resizeStartX = 0
+let resizeStartWidth = 0
 
 const ui = usePdfGalleryUi(
   toRef(props, 'title'),
@@ -108,6 +126,56 @@ const ui = usePdfGalleryUi(
 )
 
 const modalTitle = computed(() => props.title || ui.value.title)
+
+const resolvedMaxWidth = () => {
+  if (props.rightPanelMaxWidth != null) {
+    return props.rightPanelMaxWidth
+  }
+
+  return Math.floor(window.innerWidth * 0.7)
+}
+
+const clampPanelWidth = (width) =>
+  Math.min(resolvedMaxWidth(), Math.max(props.rightPanelMinWidth, Math.round(width)))
+
+const onResizePointerMove = (event) => {
+  if (!isResizing.value) {
+    return
+  }
+
+  // Dragging the left edge: move left → wider panel.
+  const delta = resizeStartX - event.clientX
+  panelWidth.value = clampPanelWidth(resizeStartWidth + delta)
+}
+
+const stopResize = () => {
+  if (!isResizing.value) {
+    return
+  }
+
+  isResizing.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  window.removeEventListener('pointermove', onResizePointerMove)
+  window.removeEventListener('pointerup', stopResize)
+  window.removeEventListener('pointercancel', stopResize)
+}
+
+const startResize = (event) => {
+  if (!props.rightPanelResizable || (event.button != null && event.button !== 0)) {
+    return
+  }
+
+  event.preventDefault()
+  isResizing.value = true
+  resizeStartX = event.clientX
+  resizeStartWidth = panelWidth.value
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', onResizePointerMove)
+  window.addEventListener('pointerup', stopResize)
+  window.addEventListener('pointercancel', stopResize)
+}
 
 const closeModal = () => {
   emit('update:open', false)
@@ -147,6 +215,15 @@ const handlePrimaryAction = () => {
 }
 
 watch(
+  () => props.rightPanelDefaultWidth,
+  (width) => {
+    if (!isResizing.value) {
+      panelWidth.value = clampPanelWidth(width)
+    }
+  }
+)
+
+watch(
   () => props.open,
   (isOpen) => {
     document.body.style.overflow = isOpen ? 'hidden' : ''
@@ -155,6 +232,7 @@ watch(
 )
 
 onUnmounted(() => {
+  stopResize()
   document.body.style.overflow = ''
 })
 </script>
@@ -164,6 +242,7 @@ onUnmounted(() => {
     <div
       v-if="open"
       class="fixed inset-0 flex flex-col bg-gray-900"
+      :class="{ 'select-none': isResizing }"
       :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
@@ -218,12 +297,34 @@ onUnmounted(() => {
         </div>
 
         <aside
-          v-if="showRightPanel"
-          class="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-white/10 bg-white"
+          v-if="rightPanelOpen"
+          class="relative flex min-h-0 shrink-0 flex-col overflow-hidden bg-white shadow-[-6px_0_16px_rgba(0,0,0,0.18)]"
           :class="rightPanelClass"
+          :style="{ width: `${panelWidth}px` }"
           role="complementary"
         >
-          <slot name="right-panel" />
+          <div
+            v-if="rightPanelResizable"
+            class="absolute inset-y-0 left-0 z-20 flex w-4 -translate-x-1/2 cursor-col-resize items-center justify-center"
+            title="Redimensionar painel"
+            aria-hidden="true"
+            @pointerdown="startResize"
+          >
+            <span
+              class="flex h-11 w-3.5 items-center justify-center gap-[2px] rounded-full border border-gray-200 bg-white shadow-md transition"
+              :class="isResizing ? 'border-blue-400 bg-blue-50 shadow-lg ring-2 ring-blue-400/30' : 'hover:border-gray-300 hover:shadow-lg'"
+            >
+              <span
+                v-for="n in 3"
+                :key="n"
+                class="h-3.5 w-0.5 rounded-full"
+                :class="isResizing ? 'bg-blue-500' : 'bg-gray-400'"
+              />
+            </span>
+          </div>
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <slot name="right-panel" />
+          </div>
         </aside>
       </div>
     </div>
