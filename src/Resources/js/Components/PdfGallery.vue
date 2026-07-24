@@ -1724,26 +1724,31 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
-        <div v-else-if="hasSelection" class="mt-2 space-y-1.5">
+        <div v-else-if="documents.length > 0" class="mt-2 space-y-1.5">
           <div class="flex flex-wrap items-center gap-1.5">
-            <span class="text-[10px] font-medium text-gray-600">
+            <span
+              v-if="hasSelection"
+              class="text-[10px] font-medium text-gray-600"
+            >
               {{ selectedCount }} selecionado{{ selectedCount === 1 ? '' : 's' }}
             </span>
             <button
               type="button"
               aria-label="Seleccionar todos"
               class="pdf-gallery-action-btn"
-              @click="toggleSelectAll"
+              :disabled="allSelected"
+              @click="selectAllDocuments"
             >
-              Todas
+              Seleccionar todos
             </button>
             <button
               type="button"
-              aria-label="Limpar selecção"
+              aria-label="Desmarcar todos"
               class="pdf-gallery-action-btn"
+              :disabled="!hasSelection"
               @click="clearSelection"
             >
-              Limpar
+              Desmarcar todos
             </button>
             <button
               v-if="canMutateDocuments && selectedDeletableCount > 0"
@@ -1755,22 +1760,22 @@ onBeforeUnmount(() => {
               Eliminar
             </button>
           </div>
-        </div>
 
-        <p
-          v-else-if="documents.length > 1"
-          class="mt-2 text-[10px] leading-snug text-gray-500"
-        >
-          <template v-if="isFullMode && isGroupedLayout">
-            Reordene autos e anexos pelos pontos · clique na miniatura para pré-visualizar
-          </template>
-          <template v-else-if="isFullMode">
-            Pontos à esquerda para reordenar · ícone de eliminar em cada ficheiro · clique na miniatura para pré-visualizar
-          </template>
-          <template v-else>
-            Seleccione para eliminar em bulk · clique na miniatura para pré-visualizar
-          </template>
-        </p>
+          <p
+            v-if="documents.length > 1"
+            class="text-[10px] leading-snug text-gray-500"
+          >
+            <template v-if="isFullMode && isGroupedLayout">
+              Reordene autos e anexos pelos pontos · clique na miniatura para pré-visualizar
+            </template>
+            <template v-else-if="isFullMode">
+              Pontos à esquerda para reordenar · ícone de eliminar em cada ficheiro · clique na miniatura para pré-visualizar
+            </template>
+            <template v-else>
+              Seleccione para eliminar em bulk · clique na miniatura para pré-visualizar
+            </template>
+          </p>
+        </div>
       </div>
 
       <div
@@ -2020,6 +2025,15 @@ onBeforeUnmount(() => {
 
 .pdf-gallery-action-btn:hover {
   background: #f3f4f6;
+}
+
+.pdf-gallery-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.pdf-gallery-action-btn:disabled:hover {
+  background: transparent;
 }
 
 .pdf-gallery-action-btn--danger {
