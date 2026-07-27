@@ -1560,7 +1560,20 @@ const resolvePrimaryActionSelection = () => {
     }
   }
 
-  return { filenames }
+  const byFilename = new Map(
+    documents.value.map((document) => [document.filename, document]),
+  )
+
+  const files = filenames.map((filename) => {
+    const document = byFilename.get(filename)
+
+    return {
+      filename,
+      label: document?.label || filename,
+    }
+  })
+
+  return { filenames, files }
 }
 
 defineExpose({
