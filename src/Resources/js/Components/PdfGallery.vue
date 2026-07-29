@@ -1579,6 +1579,44 @@ const resolvePrimaryActionSelection = () => {
 defineExpose({
   resolvePrimaryActionTarget,
   resolvePrimaryActionSelection,
+  loadDocuments,
+  openDocument,
+  reloadAndOpen: async (filename) => {
+    const previousSelection = new Set(selectedFilenames.value)
+    loading.value = true
+
+    try {
+      const data = await api.listDocuments(props.userId)
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      documents.value = normalizeGalleryDocuments(data.documents)
+
+      const existing = new Set(documents.value.map((document) => document.filename))
+      const nextSelection = new Set(
+        [...previousSelection].filter((name) => existing.has(name)),
+      )
+
+      if (filename && existing.has(filename)) {
+        nextSelection.add(filename)
+        openDocument(filename)
+      } else if (activeFilename.value && !existing.has(activeFilename.value)) {
+        activeFilename.value = documents.value[0]?.filename || ''
+      }
+
+      selectedFilenames.value = nextSelection
+    } catch (error) {
+      showNotification(
+        'error',
+        'Erro',
+        error?.response?.data?.error || error?.message || `Erro ao carregar ${ui.value.documentPlural}.`,
+      )
+    } finally {
+      loading.value = false
+    }
+  },
 })
 
 onBeforeUnmount(() => {

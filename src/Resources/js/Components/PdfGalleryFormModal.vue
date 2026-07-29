@@ -214,6 +214,14 @@ const handlePrimaryAction = () => {
   emit('primary-action', target)
 }
 
+defineExpose({
+  resolvePrimaryActionTarget: () => galleryRef.value?.resolvePrimaryActionTarget?.(),
+  resolvePrimaryActionSelection: () => galleryRef.value?.resolvePrimaryActionSelection?.(),
+  reloadAndOpen: (filename) => galleryRef.value?.reloadAndOpen?.(filename),
+  openDocument: (filename) => galleryRef.value?.openDocument?.(filename),
+  loadDocuments: () => galleryRef.value?.loadDocuments?.(),
+})
+
 watch(
   () => props.rightPanelDefaultWidth,
   (width) => {
