@@ -363,8 +363,27 @@ const isDocumentReorderable = (document) =>
 const isDocumentSelectable = (document) =>
   document?.showSelect !== false && document?.show_select !== false
 
+const isDocumentSelectionRequired = (document) =>
+  document?.selectionRequired === true || document?.selection_required === true
+
 const isDocumentFixedTail = (document) =>
   document?.fixedTail === true || document?.fixed_tail === true
+
+const requiredSelectionFilenames = () =>
+  documents.value
+    .filter((document) => isDocumentSelectionRequired(document))
+    .map((document) => document.filename)
+    .filter((filename) => typeof filename === 'string' && filename !== '')
+
+const withRequiredSelection = (filenames) => {
+  const next = new Set(filenames)
+
+  for (const filename of requiredSelectionFilenames()) {
+    next.add(filename)
+  }
+
+  return next
+}
 
 const groupCanReorder = (group) =>
   Array.isArray(group?.documents) && group.documents.some((document) => isDocumentReorderable(document))
@@ -440,7 +459,7 @@ const applySavedDocument = (document) => {
   documents.value.push(normalized)
   activeFilename.value = normalized.filename
   previewMode.value = 'single'
-  selectedFilenames.value = new Set([normalized.filename])
+  selectedFilenames.value = withRequiredSelection([normalized.filename])
   mergedSourceFilenames.value = []
   revokeMergedUrl()
 }
@@ -457,7 +476,7 @@ const revokeMergedUrl = () => {
 
 const syncSelectionAfterListChange = () => {
   const existing = new Set(documents.value.map((document) => document.filename))
-  selectedFilenames.value = new Set(
+  selectedFilenames.value = withRequiredSelection(
     [...selectedFilenames.value].filter((filename) => existing.has(filename)),
   )
 
@@ -469,7 +488,7 @@ const syncSelectionAfterListChange = () => {
 }
 
 const selectAllDocuments = () => {
-  selectedFilenames.value = new Set(
+  selectedFilenames.value = withRequiredSelection(
     documents.value
       .map((document) => document.filename)
       .filter((filename) => typeof filename === 'string' && filename !== ''),
@@ -518,6 +537,12 @@ const loadDocuments = async () => {
 }
 
 const toggleSelect = (filename) => {
+  const document = documents.value.find((item) => item.filename === filename)
+
+  if (isDocumentSelectionRequired(document) && selectedFilenames.value.has(filename)) {
+    return
+  }
+
   const next = new Set(selectedFilenames.value)
 
   if (next.has(filename)) {
@@ -526,12 +551,12 @@ const toggleSelect = (filename) => {
     next.add(filename)
   }
 
-  selectedFilenames.value = next
+  selectedFilenames.value = withRequiredSelection(next)
 }
 
 const toggleSelectAll = () => {
   if (allSelected.value) {
-    selectedFilenames.value = new Set()
+    selectedFilenames.value = withRequiredSelection([])
     return
   }
 
@@ -1623,7 +1648,7 @@ defineExpose({
       documents.value = normalizeGalleryDocuments(data.documents)
 
       const existing = new Set(documents.value.map((document) => document.filename))
-      const nextSelection = new Set(
+      const nextSelection = withRequiredSelection(
         [...previousSelection].filter((name) => existing.has(name)),
       )
 
@@ -1949,6 +1974,7 @@ onBeforeUnmount(() => {
                       :is-drag-source="isInReorderDragBlock(document.filename)"
                       :can-reorder="isFullMode && group.documents.length > 1 && isDocumentReorderable(document)"
                       :show-select="documents.length > 0 && isDocumentSelectable(document)"
+                      :selection-required="isDocumentSelectionRequired(document)"
                       :show-remove="canRemoveDocument(document)"
                       :show-order-badge="isFullMode"
                       @toggle-select="toggleSelect(document.filename)"
@@ -2008,6 +2034,7 @@ onBeforeUnmount(() => {
                 :is-drag-source="isInReorderDragBlock(document.filename)"
                 :can-reorder="isFullMode && documents.length > 1 && isDocumentReorderable(document)"
                 :show-select="documents.length > 0 && isDocumentSelectable(document)"
+                :selection-required="isDocumentSelectionRequired(document)"
                 :show-remove="canRemoveDocument(document)"
                 :show-order-badge="isFullMode"
                 @toggle-select="toggleSelect(document.filename)"

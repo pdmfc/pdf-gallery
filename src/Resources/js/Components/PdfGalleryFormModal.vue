@@ -259,12 +259,14 @@ onUnmounted(() => {
       <header
         class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-gray-900 px-4 py-2.5"
       >
-        <p class="truncate text-sm font-medium text-white">
+        <p class="min-w-0 shrink truncate text-sm font-medium text-white">
           {{ modalTitle }}
           <span v-if="subtitle" class="text-white/50"> — {{ subtitle }}</span>
         </p>
-        <div class="flex shrink-0 items-center gap-2">
-          <slot name="header-actions" />
+        <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <div class="min-w-0 flex-1 overflow-hidden text-right">
+            <slot name="header-actions" />
+          </div>
           <button
             v-if="primaryActionLabel"
             type="button"

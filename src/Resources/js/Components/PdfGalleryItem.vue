@@ -54,6 +54,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  selectionRequired: {
+    type: Boolean,
+    default: false,
+  },
   showRemove: {
     type: Boolean,
     default: false,
@@ -116,9 +120,13 @@ const formatSize = (bytes) => {
       v-if="showSelect"
       type="button"
       class="pdf-gallery-item__btn pdf-gallery-item__btn--select"
-      :class="selected ? 'pdf-gallery-item__btn--select-active' : ''"
-      aria-label="Seleccionar"
-      @click.stop="emit('toggle-select')"
+      :class="[
+        selected ? 'pdf-gallery-item__btn--select-active' : '',
+        selectionRequired ? 'pdf-gallery-item__btn--select-locked' : '',
+      ]"
+      :aria-label="selectionRequired ? 'Seleccionado (obrigatório)' : 'Seleccionar'"
+      :aria-disabled="selectionRequired ? 'true' : undefined"
+      @click.stop="!selectionRequired && emit('toggle-select')"
     >
       <span v-if="selected">✓</span>
     </button>
@@ -278,6 +286,11 @@ const formatSize = (bytes) => {
 .pdf-gallery-item__btn--select-active {
   border-color: #3b82f6;
   color: #2563eb;
+}
+
+.pdf-gallery-item__btn--select-locked {
+  cursor: not-allowed;
+  opacity: 0.85;
 }
 
 .pdf-gallery-item__btn--open {
