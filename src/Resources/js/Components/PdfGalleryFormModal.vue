@@ -264,6 +264,7 @@ onUnmounted(() => {
           <span v-if="subtitle" class="text-white/50"> — {{ subtitle }}</span>
         </p>
         <div class="flex shrink-0 items-center gap-2">
+          <slot name="header-actions" />
           <button
             v-if="primaryActionLabel"
             type="button"
