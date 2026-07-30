@@ -357,6 +357,34 @@ const normalizeGalleryDocument = (document) => {
 const normalizeGalleryDocuments = (items) =>
   (Array.isArray(items) ? items : []).map((document) => normalizeGalleryDocument(document))
 
+const isDocumentReorderable = (document) =>
+  document?.canReorder !== false && document?.can_reorder !== false
+
+const isDocumentSelectable = (document) =>
+  document?.showSelect !== false && document?.show_select !== false
+
+const isDocumentFixedTail = (document) =>
+  document?.fixedTail === true || document?.fixed_tail === true
+
+const groupCanReorder = (group) =>
+  Array.isArray(group?.documents) && group.documents.some((document) => isDocumentReorderable(document))
+
+const clampFixedTailDocuments = (docs) => {
+  const list = Array.isArray(docs) ? [...docs] : []
+  const movable = []
+  const fixed = []
+
+  for (const document of list) {
+    if (isDocumentFixedTail(document)) {
+      fixed.push(document)
+    } else {
+      movable.push(document)
+    }
+  }
+
+  return fixed.length === 0 ? list : [...movable, ...fixed]
+}
+
 const isDocumentDeletable = (document) => {
   const normalized = normalizeGalleryDocument(document)
 
@@ -904,8 +932,8 @@ const applyReorderMove = async (fromIndex, insertAt, groupId = null) => {
   }
 
   updated.splice(target, 0, item)
-  documents.value = updated
-  await persistReorder(updated)
+  documents.value = clampFixedTailDocuments(updated)
+  await persistReorder(documents.value)
 
   return true
 }
@@ -921,8 +949,8 @@ const applyGroupReorderMove = async (fromGroupIndex, insertAtGroupIndex) => {
     return false
   }
 
-  documents.value = nextDocuments
-  await persistReorder(nextDocuments)
+  documents.value = clampFixedTailDocuments(nextDocuments)
+  await persistReorder(documents.value)
 
   return true
 }
@@ -1867,7 +1895,7 @@ onBeforeUnmount(() => {
             >
               <div class="flex items-center gap-2 px-2 py-1.5">
                 <button
-                  v-if="isFullMode && (documentGroups?.length || 0) > 1"
+                  v-if="isFullMode && (documentGroups?.length || 0) > 1 && groupCanReorder(group)"
                   type="button"
                   class="pdf-gallery-item__btn pdf-gallery-item__btn--reorder shrink-0"
                   aria-label="Arrastar auto para reordenar"
@@ -1919,8 +1947,8 @@ onBeforeUnmount(() => {
                       :page-count="document.page_count"
                       :size-bytes="document.size_bytes"
                       :is-drag-source="isInReorderDragBlock(document.filename)"
-                      :can-reorder="isFullMode && group.documents.length > 1"
-                      :show-select="documents.length > 0"
+                      :can-reorder="isFullMode && group.documents.length > 1 && isDocumentReorderable(document)"
+                      :show-select="documents.length > 0 && isDocumentSelectable(document)"
                       :show-remove="canRemoveDocument(document)"
                       :show-order-badge="isFullMode"
                       @toggle-select="toggleSelect(document.filename)"
@@ -1978,8 +2006,8 @@ onBeforeUnmount(() => {
                 :page-count="document.page_count"
                 :size-bytes="document.size_bytes"
                 :is-drag-source="isInReorderDragBlock(document.filename)"
-                :can-reorder="isFullMode && documents.length > 1"
-                :show-select="documents.length > 0"
+                :can-reorder="isFullMode && documents.length > 1 && isDocumentReorderable(document)"
+                :show-select="documents.length > 0 && isDocumentSelectable(document)"
                 :show-remove="canRemoveDocument(document)"
                 :show-order-badge="isFullMode"
                 @toggle-select="toggleSelect(document.filename)"
