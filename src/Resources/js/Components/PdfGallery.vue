@@ -162,6 +162,29 @@ const activeDocument = computed(() =>
   documents.value.find((document) => document.filename === activeFilename.value) || null
 )
 
+const navigableDocuments = computed(() =>
+  documents.value.filter((document) => document.previewable && document.url),
+)
+
+const activeDocumentIndex = computed(() =>
+  navigableDocuments.value.findIndex((document) => document.filename === activeFilename.value),
+)
+
+const canPrevDocument = computed(
+  () => previewMode.value === 'single' && activeDocumentIndex.value > 0,
+)
+
+const canNextDocument = computed(
+  () =>
+    previewMode.value === 'single'
+    && activeDocumentIndex.value >= 0
+    && activeDocumentIndex.value < navigableDocuments.value.length - 1,
+)
+
+const showDocumentNav = computed(
+  () => previewMode.value === 'single' && navigableDocuments.value.length > 1,
+)
+
 const previewUrl = computed(() => {
   if (previewMode.value === 'merged' && mergedPreviewUrl.value) {
     return mergedPreviewUrl.value
@@ -571,6 +594,14 @@ const openDocument = (filename) => {
   activeFilename.value = filename
   previewMode.value = 'single'
   revokeMergedUrl()
+}
+
+const openAdjacentDocument = (delta) => {
+  const nextDocument = navigableDocuments.value[activeDocumentIndex.value + delta]
+
+  if (nextDocument?.filename) {
+    openDocument(nextDocument.filename)
+  }
 }
 
 const uploadAccept = computed(() =>
@@ -2068,11 +2099,18 @@ onBeforeUnmount(() => {
         :printing="printing"
         :show-toolbar="canShowPreviewToolbar"
         :empty-message="previewEmptyMessage"
+        :show-document-nav="showDocumentNav"
+        :document-index="activeDocumentIndex"
+        :document-count="navigableDocuments.length"
+        :can-prev-document="canPrevDocument"
+        :can-next-document="canNextDocument"
         @print="printPreview"
         @download="downloadPreview"
         @delete="deleteActiveDocument"
         @save-merged="saveMergedToGallery"
         @extract-pages="extractPagesToGallery"
+        @prev-document="openAdjacentDocument(-1)"
+        @next-document="openAdjacentDocument(1)"
       />
     </main>
 

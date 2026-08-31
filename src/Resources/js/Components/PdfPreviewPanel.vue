@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { loadPdfDocument } from '../composables/usePdfJs'
 
 const props = defineProps({
@@ -43,9 +43,41 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  continuousPages: {
+    type: Boolean,
+    default: true,
+  },
+  showDocumentNav: {
+    type: Boolean,
+    default: false,
+  },
+  documentIndex: {
+    type: Number,
+    default: -1,
+  },
+  documentCount: {
+    type: Number,
+    default: 0,
+  },
+  canPrevDocument: {
+    type: Boolean,
+    default: false,
+  },
+  canNextDocument: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['print', 'download', 'save-merged', 'extract-pages', 'delete'])
+const emit = defineEmits([
+  'print',
+  'download',
+  'save-merged',
+  'extract-pages',
+  'delete',
+  'prev-document',
+  'next-document',
+])
 
 const canvasRef = ref(null)
 const pageNumber = ref(1)
@@ -56,11 +88,13 @@ const error = ref('')
 const extractFrom = ref(1)
 const extractTo = ref(1)
 const extractRangeManual = ref(false)
+const pageCanvasElements = ref([])
+const scrollContainerRef = ref(null)
 
 let renderToken = 0
 
-const canPrev = computed(() => pageNumber.value > 1)
-const canNext = computed(() => pageNumber.value < pageCount.value)
+const canPrev = computed(() => !props.continuousPages && pageNumber.value > 1)
+const canNext = computed(() => !props.continuousPages && pageNumber.value < pageCount.value)
 
 const canExtract = computed(() => {
   if (!props.showExtractPages || pageCount.value < 1) {
@@ -73,30 +107,81 @@ const canExtract = computed(() => {
   return from >= 1 && to <= pageCount.value && from <= to
 })
 
-const renderCurrentPage = async () => {
+const pageSlots = computed(() =>
+  Array.from({ length: Math.max(pageCount.value, 0) }, (_, index) => index + 1),
+)
+
+const registerPageCanvas = (element, index) => {
+  if (element) {
+    pageCanvasElements.value[index] = element
+  }
+}
+
+const renderPaginatedPage = async (token) => {
   if (!props.url || !canvasRef.value) {
     pageCount.value = 0
     return
   }
 
-  const token = ++renderToken
-  loading.value = true
-  error.value = ''
+  const pdf = await loadPdfDocument(props.url)
+  pageCount.value = pdf.numPages
 
-  try {
-    const pdf = await loadPdfDocument(props.url)
-    pageCount.value = pdf.numPages
+  if (token !== renderToken) {
+    return
+  }
 
+  const safePage = Math.min(Math.max(pageNumber.value, 1), pdf.numPages || 1)
+  pageNumber.value = safePage
+
+  const page = await pdf.getPage(safePage)
+  const viewport = page.getViewport({ scale: scale.value })
+  const canvas = canvasRef.value
+  const context = canvas.getContext('2d')
+
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+
+  await page.render({
+    canvasContext: context,
+    viewport,
+  }).promise
+}
+
+const renderContinuousPages = async (token) => {
+  if (!props.url) {
+    pageCount.value = 0
+    pageCanvasElements.value = []
+    return
+  }
+
+  const pdf = await loadPdfDocument(props.url)
+
+  if (token !== renderToken) {
+    return
+  }
+
+  pageCount.value = pdf.numPages
+  pageCanvasElements.value = []
+
+  await nextTick()
+
+  if (token !== renderToken) {
+    return
+  }
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
     if (token !== renderToken) {
       return
     }
 
-    const safePage = Math.min(Math.max(pageNumber.value, 1), pdf.numPages || 1)
-    pageNumber.value = safePage
+    const canvas = pageCanvasElements.value[pageNum - 1]
 
-    const page = await pdf.getPage(safePage)
+    if (!canvas) {
+      continue
+    }
+
+    const page = await pdf.getPage(pageNum)
     const viewport = page.getViewport({ scale: scale.value })
-    const canvas = canvasRef.value
     const context = canvas.getContext('2d')
 
     canvas.width = viewport.width
@@ -106,6 +191,26 @@ const renderCurrentPage = async () => {
       canvasContext: context,
       viewport,
     }).promise
+  }
+}
+
+const renderPreview = async () => {
+  if (!props.url) {
+    pageCount.value = 0
+    pageCanvasElements.value = []
+    return
+  }
+
+  const token = ++renderToken
+  loading.value = true
+  error.value = ''
+
+  try {
+    if (props.continuousPages) {
+      await renderContinuousPages(token)
+    } else {
+      await renderPaginatedPage(token)
+    }
   } catch (e) {
     if (token === renderToken) {
       error.value = e?.message || 'Não foi possível renderizar o PDF.'
@@ -118,11 +223,20 @@ const renderCurrentPage = async () => {
 }
 
 watch(
-  () => [props.url, pageNumber.value, scale.value],
+  () => [props.url, scale.value, props.continuousPages],
   () => {
-    renderCurrentPage()
+    renderPreview()
   },
-  { immediate: true, flush: 'post' }
+  { immediate: true, flush: 'post' },
+)
+
+watch(
+  () => pageNumber.value,
+  () => {
+    if (!props.continuousPages) {
+      renderPreview()
+    }
+  },
 )
 
 watch(
@@ -130,10 +244,15 @@ watch(
   () => {
     pageNumber.value = 1
     pageCount.value = 0
+    pageCanvasElements.value = []
     extractFrom.value = 1
     extractTo.value = 1
     extractRangeManual.value = false
-  }
+
+    if (scrollContainerRef.value) {
+      scrollContainerRef.value.scrollTop = 0
+    }
+  },
 )
 
 watch(pageNumber, (page) => {
@@ -178,6 +297,18 @@ const goPrev = () => {
 const goNext = () => {
   if (canNext.value) {
     pageNumber.value += 1
+  }
+}
+
+const goPrevDocument = () => {
+  if (props.canPrevDocument) {
+    emit('prev-document')
+  }
+}
+
+const goNextDocument = () => {
+  if (props.canNextDocument) {
+    emit('next-document')
   }
 }
 
@@ -269,11 +400,18 @@ onBeforeUnmount(() => {
 
       <p class="min-w-0 truncate text-right text-xs text-white/80">
         <span class="font-medium text-white/95">{{ title }}</span>
-        <span v-if="pageCount" class="text-white/50"> · {{ pageNumber }}/{{ pageCount }}</span>
+        <span v-if="pageCount && !continuousPages" class="text-white/50"> · {{ pageNumber }}/{{ pageCount }}</span>
+        <span v-else-if="pageCount && continuousPages" class="text-white/50"> · {{ pageCount }} págs</span>
+        <span
+          v-if="showDocumentNav && documentCount > 1"
+          class="text-white/50"
+        >
+          · doc. {{ documentIndex + 1 }}/{{ documentCount }}
+        </span>
       </p>
     </div>
 
-    <div class="relative min-h-0 flex-1 overflow-auto p-4">
+    <div ref="scrollContainerRef" class="relative min-h-0 flex-1 overflow-auto p-4">
       <div
         v-if="!url"
         class="flex h-full min-h-[360px] flex-col items-center justify-center px-6 text-center text-gray-400"
@@ -299,8 +437,19 @@ onBeforeUnmount(() => {
           A carregar pré-visualização…
         </div>
         <p v-if="error" class="text-sm text-red-300">{{ error }}</p>
+        <div
+          v-if="continuousPages && !error"
+          class="flex w-full max-w-full flex-col items-center gap-4"
+        >
+          <canvas
+            v-for="page in pageSlots"
+            :key="`${url}-${page}`"
+            :ref="(element) => registerPageCanvas(element, page - 1)"
+            class="max-w-full rounded-lg bg-white shadow-lg"
+          />
+        </div>
         <canvas
-          v-show="!error && !loading"
+          v-else-if="!error && !loading"
           ref="canvasRef"
           class="max-w-full rounded-lg bg-white shadow-lg"
         />
@@ -312,35 +461,69 @@ onBeforeUnmount(() => {
       class="shrink-0 border-t border-white/10 bg-gray-950/95 px-4 py-3"
     >
       <div class="flex flex-wrap items-center justify-center gap-2">
-        <button
-          type="button"
-          title="Página anterior"
-          class="preview-icon-btn"
-          :disabled="!canPrev"
-          @click="goPrev"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          title="Página seguinte"
-          class="preview-icon-btn"
-          :disabled="!canNext"
-          @click="goNext"
-        >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        <template v-if="showDocumentNav">
+          <button
+            type="button"
+            title="Documento anterior"
+            class="preview-icon-btn"
+            :disabled="!canPrevDocument"
+            @click="goPrevDocument"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            title="Documento seguinte"
+            class="preview-icon-btn"
+            :disabled="!canNextDocument"
+            @click="goNextDocument"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
 
-        <span
-          v-if="pageCount"
-          class="min-w-[4.5rem] px-2 text-center text-xs font-medium text-white/70"
-        >
-          {{ pageNumber }} / {{ pageCount }}
-        </span>
+          <span
+            v-if="documentCount > 1"
+            class="min-w-[4.5rem] px-2 text-center text-xs font-medium text-white/70"
+          >
+            {{ documentIndex + 1 }} / {{ documentCount }}
+          </span>
+        </template>
+
+        <template v-else-if="!continuousPages">
+          <button
+            type="button"
+            title="Página anterior"
+            class="preview-icon-btn"
+            :disabled="!canPrev"
+            @click="goPrev"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            title="Página seguinte"
+            class="preview-icon-btn"
+            :disabled="!canNext"
+            @click="goNext"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <span
+            v-if="pageCount"
+            class="min-w-[4.5rem] px-2 text-center text-xs font-medium text-white/70"
+          >
+            {{ pageNumber }} / {{ pageCount }}
+          </span>
+        </template>
 
         <div
           v-if="showExtractPages && pageCount > 0"
