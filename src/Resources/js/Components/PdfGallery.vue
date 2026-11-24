@@ -23,6 +23,8 @@ import {
   clampInsertAtToGroup,
   reorderDocumentGroups,
 } from '../composables/usePdfGalleryGroups.js'
+import { printPdfDocument } from '../composables/usePdfPrint.js'
+import { resolveDocumentDownloadName } from '../composables/documentDownloadName.js'
 
 const vEditorTooltipRoot = editorTooltipRoot
 
@@ -1461,33 +1463,7 @@ const resolvePrintUrl = async () => {
   throw new Error('Seleccione um ou mais documentos para imprimir.')
 }
 
-const printFromUrl = (url) =>
-  new Promise((resolve) => {
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    iframe.src = url
-
-    const cleanup = () => {
-      iframe.remove()
-      resolve()
-    }
-
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow?.focus()
-        iframe.contentWindow?.print()
-      } finally {
-        setTimeout(cleanup, 1000)
-      }
-    }
-
-    document.body.appendChild(iframe)
-  })
+const printFromUrl = (url) => printPdfDocument(url)
 
 const printPreview = async () => {
   if (printing.value) {
@@ -1567,16 +1543,6 @@ const resolveDownloadUrl = async () => {
   }
 
   return { url, revoke: false }
-}
-
-const resolveDocumentDownloadName = (document, { merged = false } = {}) => {
-  if (merged) {
-    return 'documentos-unidos.pdf'
-  }
-
-  const base = document?.label || document?.filename
-
-  return base || 'documento'
 }
 
 const downloadPreview = async () => {
