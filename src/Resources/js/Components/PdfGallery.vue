@@ -93,6 +93,16 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  /** When provided, selects exactly these filenames after the initial list load. */
+  initiallySelectedFilenames: {
+    type: Array,
+    default: null,
+  },
+  /** Maximum number of selected documents; exceeding it blocks the primary action. */
+  maxSelected: {
+    type: Number,
+    default: null,
+  },
   /**
    * When false, hide upload / QR / delete / merge-save (select + reorder + preview remain).
    * Used by dispatch galleries that read auto folders without mutating them.
@@ -258,6 +268,15 @@ const previewTitle = computed(() => {
 
 const selectedCount = computed(() => selectedFilenames.value.size)
 const hasSelection = computed(() => selectedCount.value > 0)
+
+const selectionOverLimit = computed(
+  () => props.maxSelected > 0 && selectedCount.value > props.maxSelected,
+)
+
+const selectionLimitMessage = computed(
+  () => `Só é possível enviar até ${props.maxSelected} documentos no Despacho. Desmarque os que não quer enviar.`,
+)
+
 const selectedDeletableCount = computed(
   () => filterDeletableFilenames([...selectedFilenames.value]).length,
 )
@@ -532,7 +551,15 @@ const loadDocuments = async () => {
 
     documents.value = normalizeGalleryDocuments(data.documents)
 
-    if (props.selectAllOnLoad) {
+    if (Array.isArray(props.initiallySelectedFilenames)) {
+      const available = new Set(documents.value.map((document) => document.filename))
+
+      selectedFilenames.value = withRequiredSelection(
+        props.initiallySelectedFilenames.filter(
+          (filename) => typeof filename === 'string' && available.has(filename),
+        ),
+      )
+    } else if (props.selectAllOnLoad) {
       selectAllDocuments()
       await nextTick()
 
@@ -1604,6 +1631,10 @@ const resolvePrimaryActionTarget = () => {
 const resolvePrimaryActionSelection = () => {
   const filenames = selectedFilenamesInGalleryOrder()
 
+  if (selectionOverLimit.value) {
+    return { error: selectionLimitMessage.value }
+  }
+
   if (filenames.length === 0) {
     return {
       error: 'Seleccione pelo menos um documento para continuar.',
@@ -1809,8 +1840,17 @@ onBeforeUnmount(() => {
         <div class="flex items-center justify-between gap-2">
           <p class="text-xs font-medium text-gray-500">
             {{ ui.listLabel }}
-            <span v-if="!loading">({{ documents.length }}<template v-if="maxFiles"> / {{ maxFiles }}</template>)</span>
+            <span v-if="!loading">
+              (<template v-if="maxSelected > 0">{{ selectedCount }} / {{ maxSelected }}</template><template v-else>{{ documents.length }}<template v-if="maxFiles"> / {{ maxFiles }}</template></template>)
+            </span>
           </p>
+        </div>
+
+        <div
+          v-if="selectionOverLimit"
+          class="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700"
+        >
+          {{ selectionLimitMessage }}
         </div>
 
         <div v-if="isFullMode && isReordering" class="mt-2 space-y-1">

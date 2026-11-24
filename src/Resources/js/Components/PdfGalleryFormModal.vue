@@ -75,6 +75,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  initiallySelectedFilenames: {
+    type: Array,
+    default: null,
+  },
+  maxSelected: {
+    type: Number,
+    default: null,
+  },
   mutationsEnabled: {
     type: Boolean,
     default: true,
@@ -303,6 +311,8 @@ onUnmounted(() => {
             :protected-filenames="protectedFilenames"
             :document-layout="documentLayout"
             :select-all-on-load="selectAllOnLoad"
+            :initially-selected-filenames="initiallySelectedFilenames"
+            :max-selected="maxSelected"
             :mutations-enabled="mutationsEnabled"
           />
         </div>
